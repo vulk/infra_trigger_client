@@ -19,6 +19,7 @@ module CrossCloudCI
     class Client
       attr_accessor :gitlab_proxy
       attr_accessor :projects
+      attr_accessor :all_gitlab_projects
 
       def initialize(options = {})
         @gitlab_proxy = CrossCloudCI::GitLabProxy.proxy(:endpoint => options[:endpoint], :api_token => options[:api_token])
@@ -128,6 +129,33 @@ end
 @c = CrossCloudCI::CiService.client(:endpoint => @config[:gitlab][:api_url], :api_token => @config[:gitlab][:api_token])
 @gp = @c.gitlab_proxy
 
-#puts @g.get_project_names
 
+all_gitlab_projects = @gp.get_projects
+
+
+#def build_active_projects
+  if @active_projects.nil?
+    @active_projects = @config[:projects].select {|p| p if @config[:projects][p]["active"] == true }
+  end
+  @active_projects.each do |proj|
+    name = proj[0]
+    puts "Active project: #{name}"
+    #next if name == "kubernetes"
+    next if name == "prometheus"
+
+    trigger_variables = {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]}
+
+    project_id =  all_gitlab_projects.select {|agp| agp["name"].downcase == name}.first["id"]
+    api_token = @config[:gitlab][:pipeline][name][:api_token]
+
+    ["stable_ref", "head_ref"].each do |release_key_name|
+      ref = @config[:projects][name][release_key_name]
+      puts "Calling build_project(#{project_id}, #{api_token}, #{ref}, #{trigger_variables})"
+      @c.build_project(project_id, api_token, ref, trigger_variables)
+    end
+  end
+#end
+
+
+#build_project(gitlabprojects.select {|p| p["name"] == "Kubernetes"}.first["id"], @config[:gitlab][:pipeline]["kubernetes"][:api_token], @config[:projects]["kubernetes"]["stable_ref"], {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]})
 
