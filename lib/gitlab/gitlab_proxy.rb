@@ -14,8 +14,10 @@ module CrossCloudCI
   module GitLabProxy
     class Proxy
       attr_accessor :client
+      attr_accessor :use_json
 
       def initialize(options = {})
+        @use_json = options[:use_json] ? true : false
         unless options[:endpoint].nil? or options[:api_token].nil?
           @client = gitlab_client(options)
         end
@@ -38,32 +40,39 @@ module CrossCloudCI
       end
 
       def get_project_names
-        gitlab_client.projects.auto_paginate.reduce([]) {|x,y| x << y.name}
+        r = gitlab_client.projects.auto_paginate.reduce([]) {|x,y| x << y.name}
+        @use_json ? r.to_json : r
       end 
 
       def get_projects 
-        gitlab_client.projects.auto_paginate.reduce([]) {|x,y| x << y.to_hash}
+        r = gitlab_client.projects.auto_paginate.reduce([]) {|x,y| x << y.to_hash}
+        @use_json ? r.to_json : r
       end 
 
       def get_project(project_id) 
-        gitlab_client.project(project_id).to_hash
+        r = gitlab_client.project(project_id).to_hash
+        @use_json ? r.to_json : r
       end 
 
       def get_pipelines(project_id)
-        gitlab_client.pipelines(project_id).auto_paginate.reduce([]) {|x,y| x << y.to_hash}
+        r = gitlab_client.pipelines(project_id).auto_paginate.reduce([]) {|x,y| x << y.to_hash}
+        @use_json ? r.to_json : r
       end 
 
       def get_pipeline(project_id, pipeline_id)
-        gitlab_client.pipeline(project_id, pipeline_id).to_hash
+        r = gitlab_client.pipeline(project_id, pipeline_id).to_hash
+        @use_json ? r.to_json : r
       end 
 
       def get_pipeline_jobs(project_id, pipeline_id)
-        gitlab_client.pipeline_jobs(project_id, pipeline_id).auto_paginate.reduce([]) {|x,y| x << y.to_hash}
+        r = gitlab_client.pipeline_jobs(project_id, pipeline_id).auto_paginate.reduce([]) {|x,y| x << y.to_hash}
+        @use_json ? r.to_json : r
       end 
 
 
       def trigger_pipeline(project_id, api_token, ref, trigger_variables = {})
-        gitlab_client.run_trigger(project_id, api_token, ref, trigger_variables)
+        r = gitlab_client.run_trigger(project_id, api_token, ref, trigger_variables)
+        @use_json ? r.to_json : r
       end
     end
   end
