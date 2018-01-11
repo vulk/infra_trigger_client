@@ -5,6 +5,7 @@ gem 'json'
 gem 'httparty'
 gem 'awesome_print'
 gem 'sqlite3'
+gem 'faraday'
 
 group :development, :test do
   #gem 'byebug'

@@ -62,6 +62,32 @@ module CrossCloudCI
           }
         }
       }
+
+      response = Faraday.get @config[:cross_cloud_yml]
+
+      if response.nil?
+        puts "ERROR: failed to retrieve cross-cloud configuration"
+        exit 1
+      else
+        cross_cloud_config = YAML.parse(response.body).to_ruby
+      end
+
+      if cross_cloud_config.nil?
+        puts "ERROR: cross-cloud configuration empty/undefined"
+        return nil
+      end
+
+      @config[:projects] = cross_cloud_config["projects"]
+      @config[:clouds] = cross_cloud_config["clouds"]
+
+      @config[:gitlab][:pipeline].each do |p|
+        cp = cross_cloud_config["gitlab_pipeline"][p[0]] 
+        next if cp.nil?
+        cp.each_pair do |k,v|
+          @config[:gitlab][:pipeline][p[0]][k] = v
+        end
+      end
+      @config
     end
   end
 end

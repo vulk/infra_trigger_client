@@ -2,6 +2,7 @@ lib = File.expand_path('../../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 config_dir = File.expand_path("../../config", __FILE__)
 
+require 'faraday'
 require 'gitlab/gitlab_proxy'
 require_relative "#{config_dir}/environment"
 
@@ -109,11 +110,24 @@ module CrossCloudCI
   end
 end
 
+def check_required(var, msg, exitstatus)
+  if var.nil? or var.empty?
+    puts msg
+    exit exitstatus unless exitstatus.nil?
+  end
+end
+
+##############################################################################
+#
 
 @config = CrossCloudCI::Common.init_config
 
-#@g = CrossCloudCI::GitLabProxy.proxy(:endpoint => @config[:gitlab][:api_url], :api_token => @config[:gitlab][:api_token])
+#cross_cloud_config_url="https://gitlab.cncf.ci/cncf/cross-cloud/raw/ci-stable-v0.1.0/cross-cloud.yml"
+
+
 @c = CrossCloudCI::CiService.client(:endpoint => @config[:gitlab][:api_url], :api_token => @config[:gitlab][:api_token])
 @gp = @c.gitlab_proxy
 
 #puts @g.get_project_names
+
+
