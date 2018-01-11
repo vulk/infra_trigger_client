@@ -38,33 +38,25 @@ module CrossCloudCI
           :base_url => gitlab_base_url,
           :api_url => "#{gitlab_base_url}/api/v4",
           :api_token => ENV["GITLAB_API_TOKEN"],
-          :projects => {
-            "cross_cloud" => {
+          :pipeline => {
+            "cross-cloud" => {
               :cross_cloud_ref => cross_cloud_ref,
               :api_token => ENV["GITLAB_CROSS_CLOUD_TOKEN"]
             },
-            "cross_project" => {
+            "cross-project" => {
               :cross_project_ref => cross_project_ref,
               :api_token => ENV["GITLAB_CROSS_PROJECT_TOKEN"]
             },
             "kubernetes" => {
-              :master_ref => "master",
-              :stable_ref => nil,
               :api_token => ENV["GITLAB_KUBERNETES_TOKEN"]
             },
             "prometheus" => {
-              :master_ref => "master",
-              :stable_ref => nil,
               :api_token => ENV["GITLAB_PROMETHEUS_TOKEN"]
             },
             "coredns" => {
-              :master_ref => "master",
-              :stable_ref => nil,
               :api_token => ENV["GITLAB_COREDNS_TOKEN"]
             },
             "linkerd" => {
-              :master_ref => "master",
-              :stable_ref => nil,
               :api_token => ENV["GITLAB_LINKERD_TOKEN"]
             }
           }
