@@ -45,8 +45,7 @@ module CrossCloudCI
       attr_accessor :config
       attr_accessor :gitlab_proxy
       attr_accessor :projects, :active_projects,  :all_gitlab_projects, :active_gitlab_projects
-      attr_accessor :project_name_id_mapping
-      attr_accessor :builds, :builds2
+      attr_accessor :builds, :builds2, :app_deploys, :provision_requests
 
       #def initialize(options = {})
       def initialize(config)
@@ -129,21 +128,77 @@ module CrossCloudCI
         status
       end
 
+
       # TODO: #5) implement provision function
-      #  - Decide how to handle build artifacts not being available, options:
-      #    1. don't handle it, expecting the caller to check for artifacts
-      #    2. return/raise error if build artifacts are not available
-      #    3. call build artifact function
-      #  - review provision script
-      #  - Required: args build artifacts / build pipeline id, cloud to provision, ref project being provisioned (eg. k8s)
       #  - use build artifacts / pipeline id
       #  - store kubernetes
+
+      def provision_cloud(cloud, options = {})
+        trigger_variables = {}
+
+        # GitLab pipeline to trigger
+        project_name = "cross-cloud"
+        project_id = project_id_by_name("cross-cloud")
+        # related to environment, eg. cidev, master, staging, production
+        trigger_ref = options[:provision_ref]
+
+        api_token = options[:api_token]
+
+        #@logger.debug "#{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}"
+        @logger.debug "options var: #{options.inspect}"
+
+        trigger_variables[:CLOUD] = cloud
+
+        kubernetes_project_id = project_id_by_name("kubernetes")
+
+        trigger_variables[:SOURCE] = options[:kubernetes_build_id] unless options[:kubernetes_build_id].nil?
+        trigger_variables[:PROJECT_ID] = kubernetes_project_id
+        trigger_variables[:PROJECT_BUILD_PIPELINE_ID] = options[:kubernetes_build_id] unless options[:kubernetes_build_id].nil?
+
+        trigger_variables[:TARGET_PROJECT_ID] = kubernetes_project_id
+        trigger_variables[:TARGET_PROJECT_NAME] = "kubernetes"
+        trigger_variables[:TARGET_PROJECT_COMMIT_REF_NAME] = options[:kubernetes_ref] unless options[:kubernetes_ref].nil?
+
+        trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
+        trigger_variables[:CROSS_CLOUD_YML] = options[:cross_cloud_yml] unless options[:cross_cloud_yml].nil?
+
+        gitlab_result = nil
+        tries=3
+        begin
+          @logger.debug "Calling Gitlab API for #{project_name} trigger_pipeline(#{project_id}, #{api_token}, #{trigger_ref}, #{trigger_variables})"
+          gitlab_result = @gitlab_proxy.trigger_pipeline(project_id, api_token, trigger_ref, trigger_variables)
+          @logger.debug "gitlab proxy result: #{gitlab_result.inspect}"
+        rescue Gitlab::Error::InternalServerError => e
+          @logger.error "Gitlab Proxy error: #{e}"
+
+          tries -= 1
+          if tries > 0
+            @logger.info "Trying to trigger pipeline for project #{project_name} again: #{project_id}, ref #{ref}"
+            retry
+          else
+            @logger.error "Failed to trigger pipeline for project #{project_name}: #{project_id}, ref #{ref}"
+            return
+          end
+        end
+
+ 
+      end
+
+
 
       # TODO: #6) implement cloud provision loop for all active clouds
       #  - Required: config including cross-cloud config
       #  - determine active clouds
       #  - call provisioning function for each active cloud for master and stable refs
       #  - handle retry
+
+
+      def provision_active_clouds
+        active_clouds=[]
+        active_clouds.each do |c|
+          self.provision_cloud("aws", {:kubernetes_build_id => 1, :kubernetes_ref => "v1.8.1", :dashboard_api_host_port => "devapi.cncf.ci", :cross_cloud_yml => @c.config[:cross_cloud_yml], :api_token => @c.config[:gitlab][:pipeline]["cross-cloud"][:api_token], :provision_ref => @c.config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]})
+        end
+      end
 
       # TODO: #7) implement app deploy function
       #  - Decide how to handle build artifacts not being available, options:
@@ -173,16 +228,21 @@ module CrossCloudCI
         if @active_gitlab_projects.nil?
           @active_gitlab_projects = @all_gitlab_projects.collect do |agp|
             agp_name = agp["name"].downcase
-            if @active_projects[agp_name]
+            proj_id = agp["id"]
+            if agp_name == "cross-cloud" || agp_name == "cross-project"
+              puts "Creating mapping for #{agp_name}"
+              @project_name_id_mapping[proj_id] = agp_name
+              @project_name_id_mapping[agp_name] = proj_id
+              nil
+            elsif @active_projects[agp_name]
               puts "adding gitlab data to active projects for #{agp_name}"
               @active_projects[agp_name]["gitlab_data"] = agp
 
-              p_id = agp["id"]
-              @logger.debug "#{agp_name} project id: #{p_id}"
+              @logger.debug "#{agp_name} project id: #{proj_id}"
               # Support looking up project by id
               #@project_id_by_name[p_id] = @active_projects[agp_name]
-              @project_name_id_mapping[p_id] = agp_name
-              @project_name_id_mapping[agp_name] = p_id
+              @project_name_id_mapping[proj_id] = agp_name
+              @project_name_id_mapping[agp_name] = proj_id
               agp
             end
           end.compact!
@@ -215,7 +275,12 @@ module CrossCloudCI
         end
       end
 
+      def list_project_name_id_mapping
+        @project_name_id_mapping
+      end
 
+      private
+        attr_accessor :project_name_id_mapping
     end
   end
 end
