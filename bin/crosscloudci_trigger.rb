@@ -3,6 +3,7 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 config_dir = File.expand_path("../../config", __FILE__)
 
 require 'faraday'
+require 'logger'
 require 'gitlab/gitlab_proxy'
 require_relative "#{config_dir}/environment"
 
@@ -18,14 +19,16 @@ end
 module CrossCloudCI
   module CiService
     class Client
+      attr_accessor :logger
       attr_accessor :config
       attr_accessor :gitlab_proxy
-      attr_accessor :projects
-      attr_accessor :all_gitlab_projects
+      attr_accessor :projects, :active_projects, :all_gitlab_projects
 
       #def initialize(options = {})
       def initialize(config)
         @config = config
+        @logger = Logger.new(STDOUT)
+        @logger.level = Logger::DEBUG
 
         @gitlab_proxy = CrossCloudCI::GitLabProxy.proxy(:endpoint => @config[:gitlab][:api_url], :api_token => @config[:gitlab][:api_token])
         #@gitlab_proxy = CrossCloudCI::GitLabProxy.proxy(:endpoint => options[:endpoint], :api_token => options[:api_token])
@@ -51,30 +54,31 @@ module CrossCloudCI
 
         trigger_variables = {}
 
-        require 'pp'
-        pp project_id, api_token, ref
-        pp options
+        @logger.debug "project id: #{project_id}, api token: #{api_token}, ref:#{ref}"
+        @logger.debug "options var: #{options.inspect}"
+
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         trigger_variables[:CROSS_CLOUD_YML] = options[:cross_cloud_yml] unless options[:cross_cloud_yml].nil?
 
-        puts "okay"
-
-
-        # TODO: #1) try again for max tries then return failure for triggering this pipeline (let caller handle failure)
-        ##
-        maxtries=5
-        tries=0
-        puts "trigger_pipeline(#{project_id}, #{api_token}, #{ref}, #{trigger_variables})"
+        tries=3
+        @logger.debug "Calling Gitlab API trigger_pipeline(#{project_id}, #{api_token}, #{ref}, #{trigger_variables})"
         begin
           @gitlab_proxy.trigger_pipeline(project_id, api_token, ref, trigger_variables)
         rescue Gitlab::Error::InternalServerError => e
-          puts "Gitlab Proxy error: #{e}"
+          @logger.error "Gitlab Proxy error: #{e}"
 
-          # Try again for max tries
+          tries -= 1
+          if tries > 0
+            @logger.info "Trying to trigger pipeline for project again: #{project_id}, ref #{ref}"
+            retry
+          else
+            @logger.error "Failed to trigger pipeline for project: #{project_id}, ref #{ref}"
+            # TODO:  2a) store nothing if failure
+            #   if the pipeline trigger fails then return nil or an error
+          end
         end
 
-
-        # TODO: #2) Store build pipeline ids somewhere. Some options
+        # TODO: #2b) Store build pipeline ids somewhere. Some options
         #      - in the ruby object for ci serveice
         #      - external in sqlite
         #      - create activerecord model to store somewhere (sqlite, postgres)
