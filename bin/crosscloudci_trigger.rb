@@ -16,13 +16,37 @@ module CrossCloudCI
   end
 end
 
+# module CrossCloudCI
+#   module CiService
+#     class Build
+#       attr_accessor :build_id, :project_name, :project_id, :project_ref
+#
+#       def initialize(project_id, build_id, project_name, project_ref)
+#         @project_id, @build_id, @project_name, @project_ref = project_id, build_id, project_name, project_ref
+#       end
+#
+#       def status
+#         build_status(@project_id, @build_id)
+#       end
+#
+#       private
+#
+#       # def build_status
+#       # end
+#     end
+#   end
+# end
+ 
+
 module CrossCloudCI
   module CiService
     class Client
       attr_accessor :logger
       attr_accessor :config
       attr_accessor :gitlab_proxy
-      attr_accessor :projects, :active_projects, :all_gitlab_projects
+      attr_accessor :projects, :active_projects,  :all_gitlab_projects, :active_gitlab_projects
+      attr_accessor :project_name_id_mapping
+      attr_accessor :builds, :builds2
 
       #def initialize(options = {})
       def initialize(config)
@@ -30,146 +54,79 @@ module CrossCloudCI
         @logger = Logger.new(STDOUT)
         @logger.level = Logger::DEBUG
 
+        @project_name_id_mapping = {}
+        @builds = { :provision_layer => [], :app_layer => [] }
+        @builds2 = []
+
         @gitlab_proxy = CrossCloudCI::GitLabProxy.proxy(:endpoint => @config[:gitlab][:api_url], :api_token => @config[:gitlab][:api_token])
         #@gitlab_proxy = CrossCloudCI::GitLabProxy.proxy(:endpoint => options[:endpoint], :api_token => options[:api_token])
       end
 
-  # BUILD_project () {
-  #     for project in ${PROJECT_BUILDS}; do
-  #         eval local project_id=\"\$PROJECT_ID_${project}\"
-  #         eval local token=\"\$TOKEN_${project}\"
-  #         eval local ref=\"\$REF_${project}\"
-  # # Trigger Stable/Master Builds
-  #         local BUILD=$(curl -X POST -F token="$token" -F ref="$ref" -F "variables[DASHBOARD_API_HOST_PORT]="${DASHBOARD_API_HOST_PORT}"" -F "variables[CROSS_CLOUD_YML]="${CROSS_CLOUD_YML}"" "$BASE_URL/api/v4/projects/$project_id/trigger/pipeline" | jq '.id')
-  #         
-  #         BUILD_ids "$project" "$BUILD" "$project_id"
-  #         #_BUILD_IDS[$project]="$project" "$BUILD" "$project_id"
-  #
-  #     done
-  # }
-      def build_project(project_id, api_token, ref, options = {})
-        # project_id = options[:project_id]
-        # api_token = options[:api_token]
-        # ref = options[:ref]
+      def project_id_by_name(name)
+        @project_name_id_mapping[name]
+      end
+
+      def project_name_by_id(project_id)
+        @project_name_id_mapping[project_id]
+      end
+
+      def build_project(project_id, ref, options = {})
+        project_name = project_name_by_id(project_id)
+
+        @logger.debug "setting api token for #{project_name}"
+        api_token = @config[:gitlab][:pipeline][project_name][:api_token]
 
         trigger_variables = {}
 
-        @logger.debug "project id: #{project_id}, api token: #{api_token}, ref:#{ref}"
+        @logger.debug "#{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}"
         @logger.debug "options var: #{options.inspect}"
 
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         trigger_variables[:CROSS_CLOUD_YML] = options[:cross_cloud_yml] unless options[:cross_cloud_yml].nil?
 
+        gitlab_result = nil
         tries=3
-        @logger.debug "Calling Gitlab API trigger_pipeline(#{project_id}, #{api_token}, #{ref}, #{trigger_variables})"
         begin
-          @gitlab_proxy.trigger_pipeline(project_id, api_token, ref, trigger_variables)
+          @logger.debug "Calling Gitlab API for #{project_name} trigger_pipeline(#{project_id}, #{api_token}, #{ref}, #{trigger_variables})"
+          gitlab_result = @gitlab_proxy.trigger_pipeline(project_id, api_token, ref, trigger_variables)
+          @logger.debug "gitlab proxy result: #{gitlab_result.inspect}"
         rescue Gitlab::Error::InternalServerError => e
           @logger.error "Gitlab Proxy error: #{e}"
 
           tries -= 1
           if tries > 0
-            @logger.info "Trying to trigger pipeline for project again: #{project_id}, ref #{ref}"
+            @logger.info "Trying to trigger pipeline for project #{project_name} again: #{project_id}, ref #{ref}"
             retry
           else
-            @logger.error "Failed to trigger pipeline for project: #{project_id}, ref #{ref}"
-            # TODO:  2a) store nothing if failure
-            #   if the pipeline trigger fails then return nil or an error
+            @logger.error "Failed to trigger pipeline for project #{project_name}: #{project_id}, ref #{ref}"
+            return
           end
         end
 
-        # TODO: #2b) Store build pipeline ids somewhere. Some options
-        #      - in the ruby object for ci serveice
-        #      - external in sqlite
-        #      - create activerecord model to store somewhere (sqlite, postgres)
+        build_id = gitlab_result.id
+        build_data = {gitlab_result.id => { project_name: project_name, ref: ref, project_id: project_id, build_id: build_id } }
+        if @config[:projects][project_name]["app_layer"]
+          @builds[:app_layer] << build_data
+        else
+          @builds[:provision_layer] << build_data
+        end
+        #@builds2 << CrossCloudCI::CiService::Build.new(project_id, build_id, project_name, ref)
+        build_data
       end
 
       def get_project_names
         @gitlab_proxy.get_project_names
       end
 
-
-      # TODO: #3) implement build status
-      #      - should return gitlab status info? succcess, running, failed, skipped, etc
-      #      - maybe squash down to 3 currently supported dashboard statuses?
-      #      - take a some argument and find build status
-      #      - requires storing outside if we want to run this after script exits
-      #
-      # TODO: build status loop? may not be needed for this client
-
-
-  # BUILD_status () {
-  #     local build="$1"
-  #     local pipeline_id="$2"
-  #     local project_id="$3"
-  #     echo "$build $pipeline_id"
-  #     until [ "${JOB_STATUS}" == '"success"' ]; do
-  #         local JOB_STATUS="$(curl -s --header "PRIVATE-TOKEN:${TOKEN}" "${BASE_URL}/api/v4/projects/${project_id}/pipelines/${pipeline_id}/jobs" | jq '.[] | select(.name=="container") | .status')"
-  #         sleep 5
-  #         echo waiting for "$build $pipeline_id $project_id"
-  #         if [ "${JOB_STATUS}" == '"failed"' ]; then
-  #             echo "$build failed"
-  #             exit 1
-  #         elif [ "${JOB_STATUS}" == '"canceled"' ]; then
-  #             echo "$build canceled"
-  #             exit 1
-  #         elif [ "${JOB_STATUS}" == '"skipped"' ]; then
-  #             echo "$build skipped"
-  #             exit 1
-  #         else
-  #             continue
-  #         fi
-  #     done
-  #     echo "$build $pipeline_id Build Sucessfull calling project deploys"
-  # }
-
-      # def build_status
-      # end
-
-  # BUILD_ids () {
-  #     local build=$1
-  #     local pipeline_id=$2
-  #     local project_id=$3
-  #         BUILD_status "$build" "$pipeline_id" "$project_id" &
-  # }
-
-     # TODO: #4? implement build ids function.  May not be needed for this client?
-     # def build_ids
-     # end
-
-  #
-  # if [ "$BASH_SOURCE" = "$0" ] ; then
-  #     #Script is being run directly.  Starting project build
-  #     BUILD_project
-  # fi
-  #
-
-      def build_active_projects
-        if @active_projects.nil?
-          @active_projects = @config[:projects].select {|p| p if @config[:projects][p]["active"] == true }
+      #def build_status(project_name, build_id)
+      def build_status(project_id, build_id)
+        #project_id = project_id_by_name(project_name) unless project_name.nil?
+        jobs = @gitlab_proxy.get_pipeline_jobs(project_id, build_id)
+        status = jobs.select {|j| j["name"] == "container"}.first["status"]
+        if status == "created"
+          status = jobs.select {|j| j["name"] == "compile"}.first["status"]
         end
-
-        if @all_gitlab_projects.nil?
-          @all_gitlab_projects = @gitlab_proxy.get_projects
-        end
-
-        @active_projects.each do |proj|
-          name = proj[0]
-          puts "Active project: #{name}"
-          #next if name == "kubernetes"
-          #next if name == "prometheus"
-
-          trigger_variables = {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]}
-
-          project_id =  all_gitlab_projects.select {|agp| agp["name"].downcase == name}.first["id"]
-          api_token = @config[:gitlab][:pipeline][name][:api_token]
-
-          ["stable_ref", "head_ref"].each do |release_key_name|
-            ref = @config[:projects][name][release_key_name]
-            puts "Calling build_project(#{project_id}, #{api_token}, #{ref}, #{trigger_variables})"
-            self.build_project(project_id, api_token, ref, trigger_variables)
-          end
-        end
+        status
       end
 
       # TODO: #5) implement provision function
@@ -201,6 +158,64 @@ module CrossCloudCI
       #  - determine active projects
       #  - call app deploy function for each active project for master and stable refs
       #  - handle retry
+
+
+      def load_project_data
+        if @active_projects.nil?
+          # Create hash of active projects from cross-cloud.yml data
+          @active_projects = @config[:projects].select {|p| p if @config[:projects][p]["active"] == true }
+        end
+
+        if @all_gitlab_projects.nil?
+          @all_gitlab_projects = @gitlab_proxy.get_projects
+        end
+
+        if @active_gitlab_projects.nil?
+          @active_gitlab_projects = @all_gitlab_projects.collect do |agp|
+            agp_name = agp["name"].downcase
+            if @active_projects[agp_name]
+              puts "adding gitlab data to active projects for #{agp_name}"
+              @active_projects[agp_name]["gitlab_data"] = agp
+
+              p_id = agp["id"]
+              @logger.debug "#{agp_name} project id: #{p_id}"
+              # Support looking up project by id
+              #@project_id_by_name[p_id] = @active_projects[agp_name]
+              @project_name_id_mapping[p_id] = agp_name
+              @project_name_id_mapping[agp_name] = p_id
+              agp
+            end
+          end.compact!
+        end
+      end
+
+      # Purpose: loop through all active projects and call build project for each
+      def build_active_projects
+        load_project_data
+        @active_projects.each do |proj|
+          name = proj[0]
+          #next unless name == "linkerd"
+
+          puts "Active project: #{name}"
+          #next if name == "kubernetes"
+          #next if name == "prometheus"
+
+          @logger.debug "setting trigger variables"
+          trigger_variables = {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]}
+
+          @logger.debug "setting project id"
+          project_id =  all_gitlab_projects.select {|agp| agp["name"].downcase == name}.first["id"]
+
+          ["stable_ref", "head_ref"].each do |release_key_name|
+            ref = @config[:projects][name][release_key_name]
+            puts "Calling build_project(#{project_id}, #{ref}, #{trigger_variables})"
+            #self.build_project(project_id, api_token, ref, trigger_variables)
+            self.build_project(project_id, ref, trigger_variables)
+          end
+        end
+      end
+
+
     end
   end
 end
@@ -233,7 +248,22 @@ end
 #       eg. build active projects is more about the 3am trigger vs a common CI service function
 #       - will need access to common config in both places
 #       - need to decide on what options are passed ot CIService (eg. common config or specifc options)
-#
 
+
+
+      # TODO: build status loop? may not be needed for this client
+
+      #         if [ "${JOB_STATUS}" == '"failed"' ]; then
+      #             echo "$build failed"
+      #             exit 1
+      #         elif [ "${JOB_STATUS}" == '"canceled"' ]; then
+      #             echo "$build canceled"
+      #             exit 1
+      #         elif [ "${JOB_STATUS}" == '"skipped"' ]; then
+      #             echo "$build skipped"
+      #             exit 1
+      #         else
+      #             continue
+      #         fi
 
 

@@ -65,16 +65,19 @@ module CrossCloudCI
 
       response = Faraday.get @config[:cross_cloud_yml]
 
+
+      # TODO: Decide if we want to return nil/raise an error and let a higher level handle the error
       if response.nil?
-        puts "ERROR: failed to retrieve cross-cloud configuration"
+        @logger.fatal "Failed to retrieve cross-cloud configuration!"
         exit 1
       else
         cross_cloud_config = YAML.parse(response.body).to_ruby
       end
 
       if cross_cloud_config.nil?
-        puts "ERROR: cross-cloud configuration empty/undefined"
-        return nil
+        @logger.fatal "cross-cloud.yml configuration empty/undefined"
+        exit 1
+        #return nil
       end
 
       @config[:projects] = cross_cloud_config["projects"]
