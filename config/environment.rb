@@ -81,6 +81,29 @@ module CrossCloudCI
       end
 
       @config[:projects] = cross_cloud_config["projects"]
+
+      # Helm configuration
+      @config[:projects]["linkerd"][:helm] = {
+        :label_master => "app=linkerd-master-linkerd",
+        :label_stable => "app=linkerd-stable-linkerd",
+        :filter_master => ".items[0].spec.containers[0].image",
+        :filter_stable => ".items[0].spec.containers[0].image"
+      }
+
+      @config[:projects]["coredns"][:helm] = {
+        :label_master => "app=coredns-master-coredns",
+        :label_stable => "app=coredns-stable-coredns",
+        :filter_master => ".items[0].spec.containers[0].image",
+        :filter_stable => ".items[0].spec.containers[0].image"
+      }
+
+      @config[:projects]["prometheus"][:helm] = {
+        :label_master => "app=prometheus-master-prometheus",
+        :label_stable => "app=prometheus-stable-prometheus",
+        :filter_master => ".items[0].spec.containers[0].image",
+        :filter_stable => ".items[0].spec.containers[0].image"
+      }
+
       @config[:clouds] = cross_cloud_config["clouds"]
 
       @config[:gitlab][:pipeline].each do |p|

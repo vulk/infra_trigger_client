@@ -8,8 +8,9 @@ gem 'sqlite3'
 gem 'faraday'
 
 group :development, :test do
-  #gem 'byebug'
+  gem 'byebug'
   #gem 'guard-rspec'
+  gem 'pry'
   gem 'rspec'
 end
 

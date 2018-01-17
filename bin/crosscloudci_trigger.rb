@@ -2,6 +2,9 @@ lib = File.expand_path('../../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 config_dir = File.expand_path("../../config", __FILE__)
 
+#require 'pry'
+require 'byebug'
+require 'base64'
 require 'faraday'
 require 'logger'
 require 'gitlab/gitlab_proxy'
@@ -45,7 +48,7 @@ module CrossCloudCI
       attr_accessor :config
       attr_accessor :gitlab_proxy
       attr_accessor :projects, :active_projects,  :all_gitlab_projects, :active_gitlab_projects
-      attr_accessor :builds, :builds2, :app_deploys, :provision_requests
+      attr_accessor :builds, :builds2, :app_deploys, :provisionings
 
       #def initialize(options = {})
       def initialize(config)
@@ -56,17 +59,11 @@ module CrossCloudCI
         @project_name_id_mapping = {}
         @builds = { :provision_layer => [], :app_layer => [] }
         @builds2 = []
+        @provisionings = []
+        @app_deploys = []
 
         @gitlab_proxy = CrossCloudCI::GitLabProxy.proxy(:endpoint => @config[:gitlab][:api_url], :api_token => @config[:gitlab][:api_token])
         #@gitlab_proxy = CrossCloudCI::GitLabProxy.proxy(:endpoint => options[:endpoint], :api_token => options[:api_token])
-      end
-
-      def project_id_by_name(name)
-        @project_name_id_mapping[name]
-      end
-
-      def project_name_by_id(project_id)
-        @project_name_id_mapping[project_id]
       end
 
       def build_project(project_id, ref, options = {})
@@ -102,19 +99,16 @@ module CrossCloudCI
           end
         end
 
-        build_id = gitlab_result.id
-        build_data = {gitlab_result.id => { project_name: project_name, ref: ref, project_id: project_id, build_id: build_id } }
+        gitlab_pipeline_id = gitlab_result.id
+        #data = { gitlab_pipeline_id => { project_name: project_name, ref: ref, project_id: project_id, pipelne_id: gitlab_pipeline_id } }
+        data = {  project_name: project_name, ref: ref, project_id: project_id, pipelne_id: gitlab_pipeline_id }
         if @config[:projects][project_name]["app_layer"]
-          @builds[:app_layer] << build_data
+          @builds[:app_layer] << data
         else
-          @builds[:provision_layer] << build_data
+          @builds[:provision_layer] << data
         end
         #@builds2 << CrossCloudCI::CiService::Build.new(project_id, build_id, project_name, ref)
-        build_data
-      end
-
-      def get_project_names
-        @gitlab_proxy.get_project_names
+        data
       end
 
       #def build_status(project_name, build_id)
@@ -128,11 +122,8 @@ module CrossCloudCI
         status
       end
 
-
       # TODO: #5) implement provision function
       #  - use build artifacts / pipeline id
-      #  - store kubernetes
-
       def provision_cloud(cloud, options = {})
         trigger_variables = {}
 
@@ -140,6 +131,8 @@ module CrossCloudCI
         project_name = "cross-cloud"
         project_id = project_id_by_name("cross-cloud")
         # related to environment, eg. cidev, master, staging, production
+        #
+        # TODO: use ref from yaml
         trigger_ref = options[:provision_ref]
 
         api_token = options[:api_token]
@@ -149,15 +142,18 @@ module CrossCloudCI
 
         trigger_variables[:CLOUD] = cloud
 
-        kubernetes_project_id = project_id_by_name("kubernetes")
+        target_project_name = "kubernetes"
+        target_project_id = project_id_by_name(target_project_name)
+        kubernetes_project_id = target_project_id
+        target_project_ref = options[:kubernetes_ref] unless options[:kubernetes_ref].nil?
 
         trigger_variables[:SOURCE] = options[:kubernetes_build_id] unless options[:kubernetes_build_id].nil?
         trigger_variables[:PROJECT_ID] = kubernetes_project_id
         trigger_variables[:PROJECT_BUILD_PIPELINE_ID] = options[:kubernetes_build_id] unless options[:kubernetes_build_id].nil?
 
-        trigger_variables[:TARGET_PROJECT_ID] = kubernetes_project_id
-        trigger_variables[:TARGET_PROJECT_NAME] = "kubernetes"
-        trigger_variables[:TARGET_PROJECT_COMMIT_REF_NAME] = options[:kubernetes_ref] unless options[:kubernetes_ref].nil?
+        trigger_variables[:TARGET_PROJECT_ID] = target_project_id
+        trigger_variables[:TARGET_PROJECT_NAME] = target_project_name
+        trigger_variables[:TARGET_PROJECT_COMMIT_REF_NAME] = target_project_ref
 
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         trigger_variables[:CROSS_CLOUD_YML] = options[:cross_cloud_yml] unless options[:cross_cloud_yml].nil?
@@ -173,30 +169,104 @@ module CrossCloudCI
 
           tries -= 1
           if tries > 0
-            @logger.info "Trying to trigger pipeline for project #{project_name} again: #{project_id}, ref #{ref}"
+            @logger.info "Trying to trigger pipeline for project #{project_name} again: #{project_id}, ref #{trigger_ref}"
             retry
           else
-            @logger.error "Failed to trigger pipeline for project #{project_name}: #{project_id}, ref #{ref}"
+            @logger.error "Failed to trigger pipeline for project #{project_name}: #{project_id}, ref #{trigger_ref}"
             return
           end
         end
 
- 
+        gitlab_pipeline_id = gitlab_result.id
+        data = { project_name: target_project_name, target_project_ref: target_project_ref, trigger_ref: trigger_ref, target_project_id: target_project_id, project_id: project_id, pipeline_id: gitlab_pipeline_id, cloud: cloud }
+        @provisionings << data
+        data
       end
 
+      def retrieve_kubeconfig(project_id, pipeline_id, api_token, cloud)
+        # TODO: pull job name from cross cloud yaml
+        job_id = pipeline_job_by_name(project_id, pipeline_id, "Provisioning")["id"]
 
+
+        # TODO: move retrive into gitlab_proxy for single artifact download
+        #
+        # GET /projects/:id/jobs/:job_id/artifacts/*artifact_path
+        #
+        url = "#{@config[:gitlab][:base_url]}/cncf/cross-cloud/-/jobs/#{job_id}/artifacts/raw/data/#{cloud}/kubeconfig"
+        #url = "#{@config[:gitlab][:base_url]}/projects/#{project_id}/-/jobs/#{job_id}/artifacts/data/#{cloud}/kubeconfig"
+
+        @logger.debug url
+
+        response = Faraday.get url
+        if response.body.nil?
+          @logger.error "Failed to download kubeconfig for cloud #{cloud}"
+          return
+        end
+
+        response.body
+      end
+
+      def pipeline_job_by_name(project_id, pipeline_id, job_name)
+        jobs = []
+        tries=3
+        begin
+          jobs = @gitlab_proxy.get_pipeline_jobs(project_id, pipeline_id)
+
+        rescue Gitlab::Error::InternalServerError => e
+          @logger.error "Gitlab Proxy error: #{e}"
+
+          tries -= 1
+          if tries > 0
+            @logger.info "Trying get_pipeline_jobs again"
+            retry
+          else
+            @logger.error "Failed get_pipeline_jobs"
+            return
+          end
+        end
+
+        jobs.select {|j| j["name"] == job_name}.first
+      end
+
+      def provision_status(project_id, provision_id)
+        tries=3
+        begin
+          jobs = @gitlab_proxy.get_pipeline_jobs(project_id, provision_id)
+
+        rescue Gitlab::Error::InternalServerError => e
+          @logger.error "Gitlab Proxy error: #{e}"
+
+          tries -= 1
+          if tries > 0
+            @logger.info "Trying get_pipeline_jobs again"
+            retry
+          else
+            @logger.error "Failed get_pipeline_jobs"
+            return
+          end
+        end
+        status = jobs.select {|j| j["name"] == "Provisioning"}.first["status"]
+        status
+      end
 
       # TODO: #6) implement cloud provision loop for all active clouds
       #  - Required: config including cross-cloud config
-      #  - determine active clouds
-      #  - call provisioning function for each active cloud for master and stable refs
-      #  - handle retry
-
-
       def provision_active_clouds
+        # TODO:
+        # - get active clouds
+        #  - pull kubernetes kubeconfig
+        # - pull kubernetes build id for stable and head/master from build stage
+        # - loop for active couds
+        # - loop for stable and head/master on each cloud
+        # - use kubernetes build id for stable and head/master based on previous build stage
+        # - use kubernetes ref for stable and head/master based on config
+
+        # kubeconfig = retrieve_kubeconfig(...)
+        # Base64.encode64(kubeconfig).gsub(/[\r\n]+/, '')
+
         active_clouds=[]
         active_clouds.each do |c|
-          self.provision_cloud("aws", {:kubernetes_build_id => 1, :kubernetes_ref => "v1.8.1", :dashboard_api_host_port => "devapi.cncf.ci", :cross_cloud_yml => @c.config[:cross_cloud_yml], :api_token => @c.config[:gitlab][:pipeline]["cross-cloud"][:api_token], :provision_ref => @c.config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]})
+          provision_cloud(c, {:kubernetes_build_id => 5413, :kubernetes_ref => "v1.8.1", :dashboard_api_host_port => "devapi.cncf.ci", :cross_cloud_yml => @config[:cross_cloud_yml], :api_token => @config[:gitlab][:pipeline]["cross-cloud"][:api_token], :provision_ref => @config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]})
         end
       end
 
@@ -208,12 +278,162 @@ module CrossCloudCI
       #  - review app deploy script
       #  - Required: build artifacts / build pipeline id, cloud, project, project ref
 
+      # app_deploy(project_id, build_id, provision_id, {:chart_repo => chart_repo
+        #           :project_ref => project_ref, :dashboard_api_host_port => 
+
+        #./#-F token="$CROSS_PROJECT_TOKEN" 
+        #./#-F ref="$CROSS_PROJECT_REF" 
+        #./#-F "variables[SOURCE]="${build_id}"" 
+        #./#-F "variables[PROJECT_ID]="${project_id}"" 
+        #./#-F "variables[ORG]="${org}"" 
+        #./#-F "variables[KUBECONFIG]="${KUBECONFIG}"" 
+        #./#F "variables[LABEL_ARGS]="${label_args}"" 
+        #./#-F "variables[FILTER]="${filter}"" 
+        #./#-F "variables[CHART]="${chart}"" 
+        #./#-F "variables[CHART_REPO]="${repo}"" 
+        #./#-F "variables[DEPLOYMENT_NAME]="${name}"" 
+        #./#-F "variables[CLOUD]="${CLOUD}"" 
+        #./#-F "variables[TARGET_PROJECT_NAME]="${target_name}"" 
+        #./#-F "variables[TARGET_PROJECT_COMMIT_REF_NAME]="${ref_name}"" 
+        #./#-F "variables[PROJECT_BUILD_PIPELINE_ID]="${build_id}"" 
+        #./#-F "variables[DASHBOARD_API_HOST_PORT]="${DASHBOARD_API_HOST_PORT}"" 
+        #./#-F "variables[CROSS_CLOUD_YML]="${CROSS_CLOUD_YML}"" 
+        #
+        #"$BASE_URL"/api/v4/projects/45/trigger/pipeline
+
+
+      
+      ## Required options
+      ##  - project_id => gitlab id of project to deploy as an integer
+      ##  - build_id => gitlab pipeline id for a project build (available in @builds)  as an integer
+      ##  - provision_id => gitlab pipeline id for a kubernetes provisioning (available in @provisionings) as an integer
+      ##  - cloud => the cloud to deploy to as a string
+      ##  - options hash
+      ##    - :chart_repo => helm chart repo
+      ##   -  :dashboard_api_host_porta => dashhboard api host and port
+      ##   -  :cross_cloud_yml => url to cross-cloud.yml
+      def app_deploy(target_project_id, target_build_id, target_provision_id, target_cloud, options = {})
+        # TODO: refactor out cloud or provision id
+        #    - maybe use cloud + kube ref + ?
+
+        ## GitLab pipeline to trigger
+        # related to environment, eg. cidev, master, staging, production
+        trigger_variables = {}
+        trigger_project_name = "cross-project"
+        trigger_project_id = project_id_by_name(trigger_project_name)
+        trigger_api_token = @config[:gitlab][:pipeline][trigger_project_name][:api_token]
+        trigger_ref = @config[:gitlab][:pipeline][trigger_project_name][:cross_project_ref]
+
+        target_project_name = project_name_by_id(target_project_id)
+        org_name = config[:projects][target_project_name]["project_url"].split("/")[3]
+
+        ####################################
+        # TODO: move this out
+        # TODO: pull cloud from provisioning
+        cross_cloud_id = project_id_by_name("cross-cloud")
+        cross_cloud_api_token = @config[:gitlab][:pipeline]["cross-cloud"][:api_token]
+        kubeconfig = retrieve_kubeconfig(cross_cloud_id, target_provision_id, cross_cloud_api_token, target_cloud)
+        kubeconfig_base64 = Base64.encode64(kubeconfig).gsub(/[\r\n]+/, '')
+
+        trigger_variables[:KUBECONFIG] = kubeconfig_base64
+        ####################################
+        #
+
+
+        #@logger.debug "#{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}"
+        @logger.debug "options var: #{options.inspect}"
+
+        kubernetes_project_id = project_id_by_name("kubernetes")
+
+        ## Setup Gitlab API trigger variables
+        trigger_variables[:CLOUD] = target_cloud
+        trigger_variables[:SOURCE] = target_build_id
+        trigger_variables[:ORG] = org_name
+
+        trigger_variables[:CHART_REPO] = options[:chart_repo] unless options[:chart_repo].nil?
+        # trigger_variables[:FILTER] = options[:filter] unless options[:filter].nil?
+        # trigger_variables[:LABEL_ARGS] = options[:label_args] unless options[:label_args].nil?
+
+        trigger_variables[:PROJECT_ID] = target_project_id
+        trigger_variables[:CHART] = target_project_name
+        trigger_variables[:PROJECT_BUILD_PIPELINE_ID] = target_build_id
+        trigger_variables[:TARGET_PROJECT_ID] = target_project_id
+        trigger_variables[:TARGET_PROJECT_NAME] = target_project_name
+        #trigger_variables[:TARGET_PROJECT_COMMIT_REF_NAME] = options[:project_ref] unless options[:project_ref].nil?
+        #trigger_variables[:TARGET_PROJECT_COMMIT_REF_NAME] = @builds[:app_layer][2].first[1][:ref]
+        
+        #binding.pry
+        project_build = @builds[:app_layer].select {|b| b[:build_id] == target_build_id}.first
+        target_project_ref = project_build[:ref]
+        trigger_variables[:TARGET_PROJECT_COMMIT_REF_NAME] = target_project_ref
+
+        trigger_variables[:DEPLOYMENT_NAME] = target_project_name
+
+        trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
+        trigger_variables[:CROSS_CLOUD_YML] = options[:cross_cloud_yml] unless options[:cross_cloud_yml].nil?
+
+        gitlab_result = nil
+        tries=3
+        begin
+          @logger.debug "Calling Gitlab API for #{target_project_name} trigger_pipeline(#{trigger_project_id}, #{trigger_api_token}, #{trigger_ref}, #{trigger_variables})"
+          gitlab_result = @gitlab_proxy.trigger_pipeline(trigger_project_id, trigger_api_token, trigger_ref, trigger_variables)
+          @logger.debug "gitlab proxy result: #{gitlab_result.inspect}"
+        rescue Gitlab::Error::InternalServerError => e
+          @logger.error "Gitlab Proxy error: #{e}"
+
+          tries -= 1
+          if tries > 0
+            @logger.info "Trying to trigger pipeline for project #{project_name} again: #{project_id}, ref #{trigger_ref}"
+            retry
+          else
+            @logger.error "Failed to trigger pipeline for project #{project_name}: #{project_id}, ref #{trigger_ref}"
+            return
+          end
+        end
+
+        gitlab_pipeline_id = gitlab_result.id
+        # TODO make this like provisioning - remove pipline_id from start
+        data = { project_name: target_project_name, ref: trigger_ref, project_id: target_project_id, pipeline_id: gitlab_pipeline_id, cloud: target_cloud} 
+        @app_deploys << data
+        data
+      end
+
+
       # TODO: #8) implement app deploy loop
       #  - Required: config including cross-cloud config
       #  - determine active projects
       #  - call app deploy function for each active project for master and stable refs
       #  - handle retry
 
+      ##############################################################
+      ## Trigger, scheduled job and Dashboard specific methods below
+      ##############################################################
+
+      # Purpose: loop through all active projects and call build project for each
+      def build_active_projects
+        load_project_data
+        @active_projects.each do |proj|
+          name = proj[0]
+          #next unless name == "linkerd"
+
+          puts "Active project: #{name}"
+          #next if name == "kubernetes"
+          #next if name == "prometheus"
+
+          @logger.debug "setting trigger variables"
+          trigger_variables = {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]}
+
+          @logger.debug "setting project id"
+          project_id =  all_gitlab_projects.select {|agp| agp["name"].downcase == name}.first["id"]
+
+          ["stable_ref", "head_ref"].each do |release_key_name|
+            ref = @config[:projects][name][release_key_name]
+            puts "Calling build_project(#{project_id}, #{ref}, #{trigger_variables})"
+            #self.build_project(project_id, api_token, ref, trigger_variables)
+            self.build_project(project_id, ref, trigger_variables)
+          end
+        end
+      end
 
       def load_project_data
         if @active_projects.nil?
@@ -249,30 +469,12 @@ module CrossCloudCI
         end
       end
 
-      # Purpose: loop through all active projects and call build project for each
-      def build_active_projects
-        load_project_data
-        @active_projects.each do |proj|
-          name = proj[0]
-          #next unless name == "linkerd"
+      def project_id_by_name(name)
+        @project_name_id_mapping[name]
+      end
 
-          puts "Active project: #{name}"
-          #next if name == "kubernetes"
-          #next if name == "prometheus"
-
-          @logger.debug "setting trigger variables"
-          trigger_variables = {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]}
-
-          @logger.debug "setting project id"
-          project_id =  all_gitlab_projects.select {|agp| agp["name"].downcase == name}.first["id"]
-
-          ["stable_ref", "head_ref"].each do |release_key_name|
-            ref = @config[:projects][name][release_key_name]
-            puts "Calling build_project(#{project_id}, #{ref}, #{trigger_variables})"
-            #self.build_project(project_id, api_token, ref, trigger_variables)
-            self.build_project(project_id, ref, trigger_variables)
-          end
-        end
+      def project_name_by_id(project_id)
+        @project_name_id_mapping[project_id]
       end
 
       def list_project_name_id_mapping
@@ -306,6 +508,17 @@ end
 
 #build_project(gitlabprojects.select {|p| p["name"] == "Kubernetes"}.first["id"], @config[:gitlab][:pipeline]["kubernetes"][:api_token], @config[:projects]["kubernetes"]["stable_ref"], {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]})
 
+@c.load_project_data
+
+
+# module CrossCloudCI
+#   module TriggerClient
+#    def self.
+
+
+__END__
+
+
 
 ## TODO LATER: (AFTER ALL WORKING)
 #
@@ -330,5 +543,6 @@ end
       #         else
       #             continue
       #         fi
+
 
 
