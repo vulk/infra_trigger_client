@@ -1,0 +1,52 @@
+Set the environment variable CROSS_CLOUD_CI_ENV
+  eg. export CROSS_CLOUD_CI_ENV=development
+
+Start irb
+
+require './bin/crosscloudci_trigger'
+
+@c has the CI client with a connection to Gitlab established
+@c.config has the configuration loaded
+
+To override the dashboard_api_host_port do the following
+
+@c.config[:dashboard][:dashboard_api_host_port] = "vidar.vu.lk:4002"
+
+To build an invidual project you need the project id and project ref.  The dashboard host port and cross cloud yml can be pulled from the config.  Example build for linkerd
+
+```
+ @c.build_project(20, "master", {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]}) 
+```
+
+To build all active projects, run `@c.build_active_projects`
+
+To provision a cloud run provision_cloud, with the cloud, kubernetes pipeline id, kubernetes ref, dashboard, cross_cloud.yml config, gitlab token (from config), cross-cloud project ref (provision_ref).  Example provisioning gke with a head/master version of kubernetes.  The api token, dashboard, cross cloud yml, and provision ref are all taken from the loaded config based on the environment.
+
+```
+@c.provision_cloud("gke", {kubernetes_build_id: 4842, kubernetes_ref: @c.config[:projects]["kubernetes"]["head_ref"], dashboard_api_host_port: "stagingapi.cncf.ci", cross_cloud_yml: @c.config[:cross_cloud_yml], :api_token => @c.config[:gitlab][:pipeline]["cross-cloud"][:api_token], provision_ref: @c.config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]}) 
+```
+
+Provision all active clouds with @c.provision_active_clouds
+
+Look at builds with @c.builds
+
+Look at build status with @c.build_status(project_id, pipeline_id)
+
+@c.build_status(20, 4869)  
+
+Look at provisionings with @c.provisionings
+
+Look at app deploys with @c.app_deploys
+
+
+Do an app deploy with target project id, target build id, cloud provision id (k8s pipeline in cross-cloud), cloud name (eg. aws) and the options for dashboard and cross cloud yml
+
+Example dagta
+  project_id: 24,
+  build_id: 5417,
+  provision_id: 5446,
+  cloud: "aws",
+
+  options: {:dashboard_api_host_port => "devapi.cncf.ci", :cross_cloud_yml => @c.config[:cross_cloud_yml], :chart_repo => "stable"}
+
+c.app_deploy(9,4835, 4845, "gce", options)
