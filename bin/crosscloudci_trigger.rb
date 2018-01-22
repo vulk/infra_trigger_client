@@ -70,7 +70,11 @@ module CrossCloudCI
         project_name = project_name_by_id(project_id)
 
         @logger.debug "setting api token for #{project_name}"
-        api_token = @config[:gitlab][:pipeline][project_name][:api_token]
+        if options[:api_token]
+          api_token = options[:api_token]
+        else
+          api_token = @config[:gitlab][:pipeline][project_name][:api_token]
+        end
 
         trigger_variables = {}
 
@@ -134,7 +138,12 @@ module CrossCloudCI
         # TODO: use ref from yaml
         trigger_ref = options[:provision_ref]
 
-        api_token = options[:api_token]
+        @logger.debug "setting api token for #{project_name}"
+        if options[:api_token]
+          api_token = options[:api_token]
+        else
+          api_token = @config[:gitlab][:pipeline][project_name][:api_token]
+        end
 
         #@logger.debug "#{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}"
         @logger.debug "options var: #{options.inspect}"
@@ -522,6 +531,15 @@ end
 ##############################################################################
 
 @config = CrossCloudCI::Common.init_config
+
+@logger = Logger.new(STDOUT)
+@logger.level = Logger::DEBUG
+
+if @config[:gitlab][:api_token].nil?
+  @logger.error "Global GitLab API token not set!"
+  exit 1
+end
+
 
 #cross_cloud_config_url="https://gitlab.cncf.ci/cncf/cross-cloud/raw/ci-stable-v0.1.0/cross-cloud.yml"
 
