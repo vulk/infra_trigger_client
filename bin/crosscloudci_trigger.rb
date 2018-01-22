@@ -237,7 +237,8 @@ module CrossCloudCI
         jobs.select {|j| j["name"] == job_name}.first
       end
 
-      def provision_status(project_id, provision_id)
+      def provision_status(provision_id)
+        project_id = project_id_by_name["cross-cloud"]
         tries=3
         begin
           jobs = @gitlab_proxy.get_pipeline_jobs(project_id, provision_id)
