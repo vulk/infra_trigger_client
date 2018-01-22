@@ -29,6 +29,8 @@ module CrossCloudCI
         dashboard_api_host_port="devapi.cncf.ci"
       end
 
+      dashboard_api_host_port = ENV["DASHBOARD_API_HOST_PORT"] unless ENV["DASHBOARD_API_HOST_PORT"].nil?
+
       @config = {
         :cross_cloud_yml => cross_cloud_yml,
         :dashboard => {
