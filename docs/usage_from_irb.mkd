@@ -20,6 +20,8 @@ To override the dashboard_api_host_port do the following
 
 @c.config[:dashboard][:dashboard_api_host_port] = "vidar.vu.lk:4002"
 
+or set the environment variable DASHBOARD_API_HOST_PORT. eg. `export DASHBOARD_API_HOST_PORT="vidar.vu.lk:4002"
+
 
 ### Building projects
 
@@ -43,7 +45,7 @@ Look at build status with @c.build_status(project_id, pipeline_id)
 To provision a cloud run provision_cloud, with the cloud, kubernetes pipeline id, kubernetes ref, dashboard, cross_cloud.yml config, gitlab token (from config), cross-cloud project ref (provision_ref).  Example provisioning gke with a head/master version of kubernetes.  The api token, dashboard, cross cloud yml, and provision ref are all taken from the loaded config based on the environment.
 
 ```
-@c.provision_cloud("gke", {kubernetes_build_id: 4842, kubernetes_ref: @c.config[:projects]["kubernetes"]["head_ref"], dashboard_api_host_port: "stagingapi.cncf.ci", cross_cloud_yml: @c.config[:cross_cloud_yml], :api_token => @c.config[:gitlab][:pipeline]["cross-cloud"][:api_token], provision_ref: @c.config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]}) 
+@c.provision_cloud("gke", {kubernetes_build_id: 4872, kubernetes_ref: @c.config[:projects]["kubernetes"]["head_ref"], dashboard_api_host_port: @c.config[:dashboard][:dashboard_api_host_port], cross_cloud_yml: @c.config[:cross_cloud_yml], :api_token => @c.config[:gitlab][:pipeline]["cross-cloud"][:api_token], provision_ref: @c.config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]}) 
 ```
 
 Provision all active clouds with @c.provision_active_clouds
