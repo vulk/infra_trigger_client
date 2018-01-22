@@ -1,4 +1,12 @@
-Set the environment variable CROSS_CLOUD_CI_ENV
+# Using the Cross-Cloud CI trigger client from an interactive command line
+
+The trigger client can be used from an IRB prompt
+
+### Setup / Configuration
+
+See README and do initial setup.
+
+Setup environment settings, especially the CROSS_CLOUD_CI_ENV variable
   eg. export CROSS_CLOUD_CI_ENV=development
 
 Start irb
@@ -12,6 +20,9 @@ To override the dashboard_api_host_port do the following
 
 @c.config[:dashboard][:dashboard_api_host_port] = "vidar.vu.lk:4002"
 
+
+### Building projects
+
 To build an invidual project you need the project id and project ref.  The dashboard host port and cross cloud yml can be pulled from the config.  Example build for linkerd
 
 ```
@@ -19,6 +30,15 @@ To build an invidual project you need the project id and project ref.  The dashb
 ```
 
 To build all active projects, run `@c.build_active_projects`
+
+Look at builds with @c.builds
+
+Look at build status with @c.build_status(project_id, pipeline_id)
+
+@c.build_status(20, 4869)  
+
+### Provisioning clouds
+
 
 To provision a cloud run provision_cloud, with the cloud, kubernetes pipeline id, kubernetes ref, dashboard, cross_cloud.yml config, gitlab token (from config), cross-cloud project ref (provision_ref).  Example provisioning gke with a head/master version of kubernetes.  The api token, dashboard, cross cloud yml, and provision ref are all taken from the loaded config based on the environment.
 
@@ -28,16 +48,9 @@ To provision a cloud run provision_cloud, with the cloud, kubernetes pipeline id
 
 Provision all active clouds with @c.provision_active_clouds
 
-Look at builds with @c.builds
-
-Look at build status with @c.build_status(project_id, pipeline_id)
-
-@c.build_status(20, 4869)  
-
 Look at provisionings with @c.provisionings
 
-Look at app deploys with @c.app_deploys
-
+### Deploying apps
 
 Do an app deploy with target project id, target build id, cloud provision id (k8s pipeline in cross-cloud), cloud name (eg. aws) and the options for dashboard and cross cloud yml
 
@@ -50,3 +63,5 @@ Example dagta
   options: {:dashboard_api_host_port => "devapi.cncf.ci", :cross_cloud_yml => @c.config[:cross_cloud_yml], :chart_repo => "stable"}
 
 c.app_deploy(9,4835, 4845, "gce", options)
+
+Look at app deploys with @c.app_deploys
