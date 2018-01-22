@@ -515,6 +515,9 @@ module CrossCloudCI
         @project_name_id_mapping
       end
 
+      # TODO: retrieve latest successful build
+      # args: project id, ref
+
       private
         attr_accessor :project_name_id_mapping
     end
