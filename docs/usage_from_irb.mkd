@@ -56,14 +56,19 @@ Look at provisionings with @c.provisionings
 
 Do an app deploy with target project id, target build id, cloud provision id (k8s pipeline in cross-cloud), cloud name (eg. aws) and the options for dashboard and cross cloud yml
 
-Example dagta
+Example data
   project_id: 24,
   build_id: 5417,
   provision_id: 5446,
   cloud: "aws",
 
-  options: {:dashboard_api_host_port => "devapi.cncf.ci", :cross_cloud_yml => @c.config[:cross_cloud_yml], :chart_repo => "stable"}
+  options = {:dashboard_api_host_port => "devapi.cncf.ci", :cross_cloud_yml => @c.config[:cross_cloud_yml], :chart_repo => "stable"}
 
 c.app_deploy(9,4835, 4845, "gce", options)
 
 Look at app deploys with @c.app_deploys
+
+### Helper methods
+
+
+@c.project_id_by_name("kubernetes") 
