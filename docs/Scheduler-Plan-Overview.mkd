@@ -1,0 +1,19 @@
+# What is this for?
+
+We want to have a CI System app which is called from the 3am cron and handles
+building, provisioning, and deploy all active projects to all clouds.
+
+## What do we need?
+
+- API Client for Cross-Cloud CI, CI service
+  * Right now this is an abstraction of the Gitlab CI system
+- API Client for Gitlab
+- Access to each Gitlab instance and each project pipelines
+- Retain state of pipelines => data needed from 
+- Call the pipelines in dependent order for each stage (eg. build before provision before app deploy)
+- Use concurrency where possible (eg. build all projects at once) => total time reduced
+- Pull information from cross-cloud.yml for active projects and clouds
+
+## 
+
+

@@ -12,14 +12,175 @@ require 'yaml/store'
 require_relative "#{config_dir}/environment"
 require 'crosscloudci/ciservice_client'
 
-@logger = Logger.new(STDOUT)
-@logger.level = Logger::DEBUG
+## TODO: Subclass CiService client?
+module CrossCloudCi
+  class TriggerClient
+    attr_accessor :logger
+    attr_accessor :config, :ciservice, :data_store
 
-@config = CrossCloudCi::Common.init_config
+    def initialize(options = {})
+      @config = CrossCloudCi::Common.init_config
 
-if @config[:gitlab][:api_token].nil?
-  @logger.error "Global GitLab API token not set!"
-  exit 1
+      if @config[:gitlab][:api_token].nil?
+        @logger.error "Global GitLab API token not set!"
+        exit 1
+      end
+
+      store_file = options[:store_file] 
+      if store_file.nil?
+        raise ArgumentError.new("TriggerClient requires a data store.  Pass :store_file option")
+      end
+      @data_store = YAML::Store.new(store_file)
+
+      @ciservice = CrossCloudCI::CiService.client(@config)
+    end
+
+    # TODO: maybe move build_active projects to trigger client?
+    def build_projects(options = {})
+      # Start builds and store data
+      data_store.transaction do
+        @ciservice.build_active_projects
+        data_store[:builds] = @ciservice.builds
+      end
+    end
+
+    def load_builds
+      # Load previous build data
+      @ciservice.builds = data_store.transaction { data_store.fetch(:builds, @ciservice.builds) }
+    end
+
+    def wait_for_kubernetes_builds(options = {})
+      status_check_interval = options[:status_check_interval] ||= 10
+      active_k8s_builds=@ciservice.builds[:provision_layer].count
+      while active_k8s_builds > 0
+        @ciservice.builds[:provision_layer].each do |b|
+          b[:pipeline_status] = @ciservice.build_status(b[:project_id],b[:pipeline_id])
+          @logger.debug "[Build] #{b[:project_name]} pipeline #{b[:pipeline_id]} status: #{b[:pipeline_status]}"
+          # next if b[:pipeline_status] == "running"
+
+          case b[:pipeline_status]
+          when "created","running",nil
+            next
+          end
+          active_k8s_builds -= 1
+        end
+        sleep status_check_interval #if active_k8s_builds > 0
+      end
+    end
+
+    def provision_clouds
+      data_store.transaction do
+        @ciservice.provision_active_clouds
+        # TODO: pull pipeline id for clouds just provisioned
+        data_store[:provisionings] = @ciservice.provisionings
+      end
+    end
+
+    # Load previous provisioning data
+    def load_previous_provisions
+      @ciservice.provisionings = data_store.transaction { data_store.fetch(:provisionings, @ciservice.provisionings) }
+    end
+
+
+    def wait_for_kubernetes_provisionings
+      #latest_k8s_builds = @builds[:provision_layer].sort! {|x,y| x[:pipeline_id] <=> y[:pipeline_id]}.slice(-2,2)
+
+      active_provisionings=@ciservice.provisionings.count
+      while active_provisionings > 0
+        @ciservice.provisionings.each do |p|
+          #p[:pipeline_status] = @ciservice.build_status(p[:project_id],p[:pipeline_id])
+          p[:pipeline_status] = @ciservice.provision_status(p[:pipeline_id])
+          @logger.debug "[Provisioning] #{p[:project_name]} pipeline #{p[:pipeline_id]} status: #{p[:pipeline_status]}"
+          case p[:pipeline_status]
+          when "created","running",nil
+            next
+          end
+          # next if p[:pipeline_status] == "running"
+          active_provisionings -= 1
+        end
+        sleep 10 #if active_provisionings > 0
+      end
+    end
+
+    def wait_for_app_builds
+      active_app_builds=@ciservice.builds[:app_layer].count
+      while active_app_builds > 0
+        @ciservice.builds[:app_layer].each do |b|
+          b[:pipeline_status] = @ciservice.build_status(b[:project_id],b[:pipeline_id])
+          @logger.debug "[Builds] #{b[:project_name]} pipeline #{b[:pipeline_id]} status: #{b[:pipeline_status]}"
+
+          case b[:pipeline_status]
+          when "created","running",nil
+            next
+          end
+          active_app_builds -= 1
+        end
+        sleep 10 #if active_app_builds > 0
+      end
+    end
+
+    def deploy_apps(options = {})
+      data_store.transaction do
+        #@c.app_deploy_to_active_clouds
+        #@c.app_deploy_to_active_clouds({release_types: [:stable]})
+        @c.app_deploy_to_active_clouds(options)
+
+        data_store[:app_deploys] = @c.app_deploys
+      end
+    end
+
+    def load_previous_app_deploys
+      @ciservice.app_deploys = data_store.transaction { data_store.fetch(:app_deploys, @ciservice.app_deploys) }
+    end
+  end
+end
+
+def trigger_help
+  puts <<-EOM
+# Methods for Trigger Client
+## Build
+# Build all active projects
+#\@tc.build_projects
+
+# Build stable release for all active projects
+#\@tc.build_projects({release_types: [:stable]})
+
+# Load build data from cache
+#\@tc.load_previous_builds
+
+## Provision (eg. K8s deploy)
+# Provision (deploy kubernetes) to all active clouds
+#
+# \@tc.provision_clouds
+
+## App Deploy (eg. Apps deployed onto K8s)
+# Deploy apps to active-provisioned clouds
+#
+# \@tc.deploy_apps # head and stable
+# \@tc.deploy_apps({release_types: [:stable]}) # only stable releases
+EOM
+end
+
+def welcome_message
+  <<-EOM
+==================================================
+= Cross-Cloud CI Trigger Client"
+==================================================
+*Quick start => type default_connect*
+
+To use defaults and get a client run: default_connect
+- @tc is the trigger client.
+- @c is the ciservice client (also @tc.ciservice)
+  => Use @c as outlined in docs/usage_from_irb.mkd 
+
+## Manual setup
+To change the data store, set the @store_file variable to use a differnt store file (default: db/datastore-<CROSS_CLOUD_CI_ENV>.yml)
+Trigger client can be created with @tc = CrossCloudCi::TriggerClient.new({store_file: @store_file})
+Ci service client is available as @tc.ciservice and @c
+Set debugging level with @tc.logger.level and @tc.ciservice.logger.level
+
+## Type trigger_help for more
+EOM
 end
 
 if ENV["CROSS_CLOUD_CI_ENV"]
@@ -28,120 +189,69 @@ else
   ci_env = "development"
 end
 
-# dt = DateTime.now.strftime("%Y%m%d-%H:%M:%S%z")
-# store_file = "db/datastore-#{ci_env}-#{dt}.yml"
-
+#dt = DateTime.now.strftime("%Y%m%d-%H:%M:%S%z")
+#store_file = "db/datastore-#{ci_env}-#{dt}.yml"
+@store_file = "db/datastore-#{ci_env}.yml"
 #store_file = "db/datastore-cidev-20180124-02:59:26-0500.yml"
-store_file = "db/datastore-production-20180124-03:07:35-0500.yml"
-data_store = YAML::Store.new(store_file)
+#store_file = "db/datastore-production-20180124-03:07:35-0500.yml"
 
-#@c = CrossCloudCI::CiService.client(:endpoint => @config[:gitlab][:api_url], :api_token => @config[:gitlab][:api_token])
-@c = CrossCloudCI::CiService.client(@config)
-#@gp = @c.gitlab_proxy
+def default_connect
+  @tc = CrossCloudCi::TriggerClient.new({store_file: @store_file})
+  @tc.logger = Logger.new(STDOUT)
+  @tc.logger.level = Logger::DEBUG
 
-
-#build_project(gitlabprojects.select {|p| p["name"] == "Kubernetes"}.first["id"], @config[:gitlab][:pipeline]["kubernetes"][:api_token], @config[:projects]["kubernetes"]["stable_ref"], {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]})
-
-#@c.load_project_data
-
-###############################################################
-## Steps for 3am scheduler
-###############################################################
-
-## 1. Build all projects
-
-# Start builds and store data
-# data_store.transaction do
-#   @c.build_active_projects
-#   data_store[:builds] = @c.builds
-# end
-
-# Load previous build data
-@c.builds = data_store.transaction { data_store.fetch(:builds, @c.builds) }
-
-## 2. Wait for a kubernetes build to complete
-#  Happy path:
-#     if success for both master/head continue
-#     if fail, cancelled or skip exit?
-
-active_k8s_builds=@c.builds[:provision_layer].count
-while active_k8s_builds > 0
-  @c.builds[:provision_layer].each do |b|
-    b[:pipeline_status] = @c.build_status(b[:project_id],b[:pipeline_id])
-    @logger.debug "[Build] #{b[:project_name]} pipeline #{b[:pipeline_id]} status: #{b[:pipeline_status]}"
-    # next if b[:pipeline_status] == "running"
-
-    case b[:pipeline_status]
-    when "created","running",nil
-      next
-    end
-    active_k8s_builds -= 1
-  end
-  sleep 10 #if active_k8s_builds > 0
+  @c = @tc.ciservice
+  @c.logger = Logger.new(STDOUT)
+  @c.logger.level = Logger::DEBUG
 end
 
-## 3. Provision kubernetes to all active clouds
-#
-# TODO: skip a provisioning a K8s if it fails to build
+if $0 == "irb"
+  puts welcome_message
+else
+  default_connect
 
-# data_store.transaction do
-#   @c.provision_active_clouds
-#   # TODO: pull pipeline id for clouds just provisioned
-#   data_store[:provisionings] = @c.provisionings
-# end
+  ###############################################################
+  ## Steps for 3am scheduler
+  ###############################################################
 
-# Load previous provisioning data
-@c.provisionings = data_store.transaction { data_store.fetch(:provisionings, @c.provisionings) }
+  ## 1. Build all projects
 
-## 4. Wait for Kubernetes to complete provisioning on active couds
-#
-#  TODO: update provision all to skip kubernetes that failed to build eg. stable build was sucess but master failed
+  # Build all active projects
+  @tc.build_projects
+  # Build stable release for all active projects
+  #@c.build_projects({release_types: [:stable]})
 
-#latest_k8s_builds = @builds[:provision_layer].sort! {|x,y| x[:pipeline_id] <=> y[:pipeline_id]}.slice(-2,2)
+  # Load build data from cache
+  #@tc.load_previous_builds
 
-active_provisionings=@c.provisionings.count
-while active_provisionings > 0
-  @c.provisionings.each do |p|
-    #p[:pipeline_status] = @c.build_status(p[:project_id],p[:pipeline_id])
-    p[:pipeline_status] = @c.provision_status(p[:pipeline_id])
-    @logger.debug "[Provisioning] #{p[:project_name]} pipeline #{p[:pipeline_id]} status: #{p[:pipeline_status]}"
-    case p[:pipeline_status]
-    when "created","running",nil
-      next
-    end
-    # next if p[:pipeline_status] == "running"
-    active_provisionings -= 1
-  end
-  sleep 10 #if active_provisionings > 0
+  ## 2. Wait for a kubernetes build to complete
+  #  Happy path:  continue no matter the status for both master/head continue (hoping/expecting success)
+
+  @tc.wait_for_kubernetes_builds
+
+  ## 3. Provision kubernetes to all active clouds
+  # TODO: skip a provisioning a K8s if it fails to build
+
+  @tc.provision_clouds
+
+  #@tc.load_previous_provisions
+ 
+  ## 4. Wait for Kubernetes to complete provisioning on active couds
+  #
+  #  TODO: update provision all to skip kubernetes that failed to build eg. stable build was sucess but master failed
+
+  @tc.wait_for_kubernetes_provisionings
+  @tc.wait_for_app_builds
+
+  ## 5. Deploy all active Apps to active clouds
+  #
+  # TODO: skip release (eg. master/head) where kubernetes failed to build?
+  # TODO: skip projects that failed to build
+  # TODO: skip clouds that had a failed provision
+
+  @tc.deploy_apps
+
+  # @tc.load_previous_app_deploys
 end
 
-
-## 5. Deploy all active Apps to active clouds
-#
-# TODO: skip release (eg. master/head) where kubernetes failed to build?
-# TODO: skip projects that failed to build
-# TODO: skip clouds that had a failed provision
-
-active_app_builds=@c.builds[:app_layer].count
-while active_app_builds > 0
-  @c.builds[:app_layer].each do |b|
-    b[:pipeline_status] = @c.build_status(b[:project_id],b[:pipeline_id])
-    @logger.debug "[Builds] #{b[:project_name]} pipeline #{b[:pipeline_id]} status: #{b[:pipeline_status]}"
-
-    case b[:pipeline_status]
-    when "created","running",nil
-      next
-    end
-    active_app_builds -= 1
-  end
-  sleep 10 #if active_app_builds > 0
-end
-
-data_store.transaction do
-  #@c.app_deploy_to_active_clouds
-  @c.app_deploy_to_active_clouds({release_types: [:stable]})
-
-  data_store[:app_deploys] = @c.app_deploys
-end
-
-
+__END__
