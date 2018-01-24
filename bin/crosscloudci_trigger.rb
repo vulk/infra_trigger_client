@@ -57,7 +57,7 @@ data_store = YAML::Store.new(store_file)
 # end
 
 # Load previous build data
-@c.builds = data_store.transaction { data_store.fetch(:builds, {}) }
+@c.builds = data_store.transaction { data_store.fetch(:builds, @c.builds) }
 
 ## 2. Wait for a kubernetes build to complete
 #  Happy path:
@@ -91,7 +91,7 @@ end
 # end
 
 # Load previous provisioning data
-@c.provisionings = data_store.transaction { data_store.fetch(:provisionings, []) }
+@c.provisionings = data_store.transaction { data_store.fetch(:provisionings, @c.provisionings) }
 
 ## 4. Wait for Kubernetes to complete provisioning on active couds
 #
