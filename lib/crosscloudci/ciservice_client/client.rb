@@ -560,9 +560,9 @@ module CrossCloudCI
         # - loop for stable and head/master on each project
         # - loop for active clouds on the current ref (stable/head)
 
-        release_types = options[:release_types]
-
         default_release_ref_keys = ["stable_ref", "head_ref"]
+
+        release_types = options[:release_types] ||= [:stable, :head]
 
         release_ref_keys = []
 

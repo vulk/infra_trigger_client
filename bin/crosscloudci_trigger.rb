@@ -38,15 +38,15 @@ module CrossCloudCi
     # TODO: maybe move build_active projects to trigger client?
     def build_projects(options = {})
       # Start builds and store data
-      data_store.transaction do
+      @data_store.transaction do
         @ciservice.build_active_projects
-        data_store[:builds] = @ciservice.builds
+        @data_store[:builds] = @ciservice.builds
       end
     end
 
-    def load_builds
+    def load_previous_builds
       # Load previous build data
-      @ciservice.builds = data_store.transaction { data_store.fetch(:builds, @ciservice.builds) }
+      @ciservice.builds = @data_store.transaction { @data_store.fetch(:builds, @ciservice.builds) }
     end
 
     def wait_for_kubernetes_builds(options = {})
@@ -69,16 +69,16 @@ module CrossCloudCi
     end
 
     def provision_clouds
-      data_store.transaction do
+      @data_store.transaction do
         @ciservice.provision_active_clouds
         # TODO: pull pipeline id for clouds just provisioned
-        data_store[:provisionings] = @ciservice.provisionings
+        @data_store[:provisionings] = @ciservice.provisionings
       end
     end
 
     # Load previous provisioning data
     def load_previous_provisions
-      @ciservice.provisionings = data_store.transaction { data_store.fetch(:provisionings, @ciservice.provisionings) }
+      @ciservice.provisionings = @data_store.transaction { @data_store.fetch(:provisionings, @ciservice.provisionings) }
     end
 
 
@@ -120,17 +120,17 @@ module CrossCloudCi
     end
 
     def deploy_apps(options = {})
-      data_store.transaction do
-        #@c.app_deploy_to_active_clouds
-        #@c.app_deploy_to_active_clouds({release_types: [:stable]})
-        @c.app_deploy_to_active_clouds(options)
+      @data_store.transaction do
+        #@ciservice.app_deploy_to_active_clouds
+        #@ciservice.app_deploy_to_active_clouds({release_types: [:stable]})
+        @ciservice.app_deploy_to_active_clouds(options)
 
-        data_store[:app_deploys] = @c.app_deploys
+        @data_store[:app_deploys] = @ciservice.app_deploys
       end
     end
 
     def load_previous_app_deploys
-      @ciservice.app_deploys = data_store.transaction { data_store.fetch(:app_deploys, @ciservice.app_deploys) }
+      @ciservice.app_deploys = @data_store.transaction { @data_store.fetch(:app_deploys, @ciservice.app_deploys) }
     end
   end
 end
