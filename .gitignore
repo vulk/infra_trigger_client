@@ -2,3 +2,4 @@
 .env.secrets
 .byebug_history
 scratch/
+db/datastore*.yml

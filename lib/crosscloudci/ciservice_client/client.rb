@@ -30,13 +30,15 @@ module CrossCloudCI
         @app_deploys = []
 
         @gitlab_proxy = CrossCloudCI::GitLabProxy.proxy(:endpoint => @config[:gitlab][:api_url], :api_token => @config[:gitlab][:api_token])
+
+        load_project_data
+        load_cloud_data
         #@gitlab_proxy = CrossCloudCI::GitLabProxy.proxy(:endpoint => options[:endpoint], :api_token => options[:api_token])
       end
 
       def build_project(project_id, ref, options = {})
         project_name = project_name_by_id(project_id)
 
-        @logger.debug "setting api token for #{project_name}"
         if options[:api_token]
           api_token = options[:api_token]
         else
@@ -45,8 +47,7 @@ module CrossCloudCI
 
         trigger_variables = {}
 
-        @logger.debug "#{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}"
-        @logger.debug "options var: #{options.inspect}"
+        @logger.info "[Build] #{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}, #{options}"
 
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
@@ -54,18 +55,18 @@ module CrossCloudCI
         gitlab_result = nil
         tries=3
         begin
-          @logger.debug "Calling Gitlab API for #{project_name} trigger_pipeline(#{project_id}, #{api_token}, #{ref}, #{trigger_variables})"
+          @logger.debug "[Build] calling Gitlab API for #{project_name} trigger_pipeline(#{project_id}, #{api_token}, #{ref}, #{trigger_variables})"
           gitlab_result = @gitlab_proxy.trigger_pipeline(project_id, api_token, ref, trigger_variables)
-          @logger.debug "gitlab proxy result: #{gitlab_result.inspect}"
+          @logger.debug "[Build] gitlab proxy result: #{gitlab_result.inspect}"
         rescue Gitlab::Error::InternalServerError => e
-          @logger.error "Gitlab Proxy error: #{e}"
+          @logger.error "[Build] Gitlab Proxy error: #{e}"
 
           tries -= 1
           if tries > 0
-            @logger.info "Trying to trigger pipeline for project #{project_name} again: #{project_id}, ref #{ref}"
+            @logger.info "[Build] Trying to trigger pipeline for project #{project_name} again: #{project_id}, ref #{ref}"
             retry
           else
-            @logger.error "Failed to trigger pipeline for project #{project_name}: #{project_id}, ref #{ref}"
+            @logger.error "[Build] Failed to trigger pipeline for project #{project_name}: #{project_id}, ref #{ref}"
             return
           end
         end
@@ -106,7 +107,7 @@ module CrossCloudCI
         end
 
         job = jobs.select {|j| j["name"] == "container"}
-        unless job.empty?
+        unless job.empty? || job.first["status"] == "created"
           status = job.first["status"]
         end
 
@@ -292,6 +293,8 @@ module CrossCloudCI
         status
       end
 
+      # provision_active_clouds()
+      #
       #  - Required: config including cross-cloud config
       # - get active clouds
       #  - pull kubernetes kubeconfig
@@ -372,8 +375,8 @@ module CrossCloudCI
       ##  - cloud => the cloud to deploy to as a string
       ##  - options hash
       ##    - :chart_repo => helm chart repo
-      ##   -  :dashboard_api_host_porta => dashhboard api host and port
-      ##   -  :cross_cloud_yml => url to cross-cloud.yml
+      ##   -  :dashboard_api_host_porta => dashhboard api host and port [OPTIONAL / override]
+      ##   -  :cross_cloud_yml => url to cross-cloud.yml [OPTIONAL / override]
       def app_deploy(target_project_id, target_build_id, target_provision_id, target_cloud, options = {})
         #@logger.debug "#{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}"
         @logger.debug "options var: #{options.inspect}"
@@ -446,8 +449,18 @@ module CrossCloudCI
 
         trigger_variables[:DEPLOYMENT_NAME] = target_project_name
 
-        trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
-        trigger_variables[:CROSS_CLOUD_YML] = options[:cross_cloud_yml] unless options[:cross_cloud_yml].nil?
+        #trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
+        if options[:dashboard_api_host_port]
+          trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port]
+        else
+          trigger_variables[:DASHBOARD_API_HOST_PORT] = @config[:dashboard][:dashboard_api_host_port]
+        end
+
+        if options[:cross_cloud_yml] 
+          trigger_variables[:CROSS_CLOUD_YML] = options[:cross_cloud_yml]
+        else
+          trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
+        end
 
         gitlab_result = nil
         tries=3
@@ -504,11 +517,113 @@ module CrossCloudCI
       #  - call app deploy function for each active project for master and stable refs
       #  - handle retry
 
-      def app_deploy_to_active_clouds
 
 
+      # app_deploy_to_active_clouds()
+      #
+      # - Required: config including cross-cloud config
+      #
+      # What does it do?
+      # - get active clouds
+      # - get active projects
+      #
+      # - loop through active projects
+      # - loop for stable and head/master on each project
+      # - loop for active clouds on the current ref (stable/head)
+      #
+      # Args:
+      #   - options hash
+      #     * :release_types => [:head, :stable] - List of release types to deploy -- OPTIONAL
+      #
+      def app_deploy_to_active_clouds(options = {})
+        load_project_data
+        load_cloud_data
+
+        # TODO: Support loading builds from GitLab
+        if @builds.nil? or @builds.empty?
+          @logger.error "Builds needed before provisioning"
+          return
+        end
+
+        if @provisionings.nil? or @provisionings.empty?
+          @logger.error "Provisioning needed before app deploy"
+          return
+        end
+
+        # latest_k8s_builds = @builds[:provision_layer].sort! {|x,y| x[:pipeline_id] <=> y[:pipeline_id]}.slice(-2,2)
+        #
+        # kubernetes_head = latest_k8s_builds.select {|b| b[:ref] == "master" }.first
+        # kubernetes_stable = latest_k8s_builds.select {|b| b[:ref] != "master" }.first
+
+
+        # - loop through active projects
+        # - loop for stable and head/master on each project
+        # - loop for active clouds on the current ref (stable/head)
+
+        release_types = options[:release_types]
+
+        default_release_ref_keys = ["stable_ref", "head_ref"]
+
+        release_ref_keys = []
+
+        release_types.each do |rt|
+          case rt
+          when [:stable]
+            release_ref_keys << ["stable_ref"]
+          when [:head]
+            release_ref_keys << ["head_ref"]
+          else
+            @logger.warn "[App Deploy Loop] Invalid release type given #{release_types}"
+          end
+        end
+
+        release_ref_keys = default_release_ref_keys if release_ref_keys.empty?
+
+        active_app_projects = @active_projects.select { |k,v| v["app_layer"] }
+        active_app_projects.each do |project|
+          project_name = project[0]
+          project_id = project_name_by_id(project_name)
+
+          @logger.info "[App Deploy] #{project_name}"
+
+          trigger_variables = {}
+
+          #["stable_ref", "head_ref"].each do |release_key_name|
+          release_ref_keys.each do |release_key_name|
+            project_ref = @config[:projects][project_name][release_key_name]
+
+            project_build = @builds[:app_layer].select {|p| p[:project_name] == project_name && p[:ref] == project_ref }.first
+            if project_build
+              project_build_id = project_build[:pipeline_id]
+            end
+
+            puts "[App Deploy] #{project_name} (#{project_id}) #{project_ref} #{trigger_variables}"
+
+            @active_clouds.each do |cloud|
+              cloud_name = cloud[0]
+              #next unless cloud_name == "gce"
+              @logger.info "[App Deploy] Active cloud: #{cloud_name}"
+
+              # kubernetes environment we will deploy to 
+              deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][release_key_name] }.first
+
+              @logger.info "[App Deploy] Deploying to #{cloud_name} running Kubernetes #{deployment_env[:target_project_ref]} provisioned in pipeline #{deployment_env[:pipeline_id]}"
+
+              # TODO: pull chart repo from config
+              options = {
+                chart_repo: "stable"
+              }
+
+              @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{deployment_env[:pipeline_id]}, #{cloud_name}, #{options})"
+
+              self.app_deploy(project_id, project_build_id, deployment_env[:pipeline_id], cloud_name, options)
+            end
+          end
+
+        end
+
+        true
       end
-
 
       ##############################################################
       ## Trigger, scheduled job and Dashboard specific methods below
