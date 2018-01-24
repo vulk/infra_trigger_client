@@ -1,4 +1,5 @@
 source 'https://rubygems.org'
+gem 'pstore'
 gem 'gitlab'
 gem 'prawn'
 gem 'json'

@@ -1,0 +1,2 @@
+module CrossCloudCI
+end
