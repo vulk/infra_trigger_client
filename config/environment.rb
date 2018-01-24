@@ -1,4 +1,6 @@
-module CrossCloudCI
+require 'yaml/store'
+
+module CrossCloudCi
   module Common
     def self.init_config(options = {})
       case ENV["CROSS_CLOUD_CI_ENV"]
@@ -116,6 +118,24 @@ module CrossCloudCI
         end
       end
       @config
+    end
+
+    def self.load_saved_data(client, store_file)
+      store = YAML::Store.new(store_file)
+
+      if client.builds.nil?
+        client.builds = store.transaction { store.fetch(:builds, { :provision_layer => [], :app_layer => [] }) }
+      end
+
+      if client.provisionings.nil?
+        client.provisionings = store.transaction { store.fetch(:provisionings, []) }
+      end
+
+      if client.app_deploys.nil?
+        client.app_deploys = store.transaction { store.fetch(:app_deploys, []) }
+      end
+
+      true
     end
   end
 end
