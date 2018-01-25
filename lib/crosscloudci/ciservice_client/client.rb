@@ -293,6 +293,24 @@ module CrossCloudCI
         status
       end
 
+      def deprovision_cloud(provision_id)
+        project_id = project_id_by_name("cross-cloud")
+        destroy_job_name = "Kubernetes_destroy"
+        jobs = @gitlab_proxy.get_pipeline_jobs(project_id, provision_id)
+        job = jobs.select { |j| j["name"] == destroy_job_name }
+
+        unless job.empty?
+          job_id = job.first["id"]
+          # job.first["status"] showing manual means the job has not ran
+        end
+
+        unless job_id 
+          raise CrossCloudCi::CiServiceError.new("Job not found for provision id: #{provision_id}")
+        end
+
+        @gitlab_proxy.gitlab_client.job_play(project_id, job_id)
+      end
+
       # provision_active_clouds()
       #
       #  - Required: config including cross-cloud config

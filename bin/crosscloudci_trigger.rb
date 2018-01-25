@@ -132,6 +132,14 @@ module CrossCloudCi
     def load_previous_app_deploys
       @ciservice.app_deploys = @data_store.transaction { @data_store.fetch(:app_deploys, @ciservice.app_deploys) }
     end
+
+    def deprovision_clouds
+      # destroy all provisionings
+      @ciservice.provisionings do |p|
+        @logger.info "[Deprovisioning] Deprovisioning #{p[:cloud]} for #{p[:project_name]} #{p[:target_project_ref]}"
+        @ciservice.deprovision_cloud(p[:pipeline_id])
+      end
+    end
   end
 end
 
@@ -140,24 +148,33 @@ def trigger_help
 # Methods for Trigger Client
 ## Build
 # Build all active projects
-#\@tc.build_projects
+\@tc.build_projects
 
 # Build stable release for all active projects
-#\@tc.build_projects({release_types: [:stable]})
+\@tc.build_projects({release_types: [:stable]})
 
 # Load build data from cache
-#\@tc.load_previous_builds
+\@tc.load_previous_builds
+
+# Build a single project
 
 ## Provision (eg. K8s deploy)
 # Provision (deploy kubernetes) to all active clouds
 #
-# \@tc.provision_clouds
+\@tc.provision_clouds
+
+# Provision a single cloud
 
 ## App Deploy (eg. Apps deployed onto K8s)
 # Deploy apps to active-provisioned clouds
 #
-# \@tc.deploy_apps # head and stable
-# \@tc.deploy_apps({release_types: [:stable]}) # only stable releases
+\@tc.deploy_apps # head and stable
+\@tc.deploy_apps({release_types: [:stable]}) # only stable releases
+
+## Deprovision (eg. destroy the kubernetes environment on a cloud)
+
+\@tc.deprovision_clouds
+\@tc.ciservice.deprovision_cloud(provision_id)
 EOM
 end
 
@@ -194,6 +211,9 @@ end
 @store_file = "db/datastore-#{ci_env}.yml"
 #store_file = "db/datastore-cidev-20180124-02:59:26-0500.yml"
 #store_file = "db/datastore-production-20180124-03:07:35-0500.yml"
+
+@logger = Logger.new(STDOUT)
+@logger.level = Logger::DEBUG
 
 def default_connect
   @tc = CrossCloudCi::TriggerClient.new({store_file: @store_file})
@@ -252,6 +272,11 @@ else
   @tc.deploy_apps
 
   # @tc.load_previous_app_deploys
+
+
+  ## Cleanup resources
+  @tc.deprovision_clouds
+
 end
 
 __END__
