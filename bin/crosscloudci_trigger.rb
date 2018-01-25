@@ -85,6 +85,15 @@ module CrossCloudCi
       end
     end
 
+    def wait_for_builds(options = {})
+      wait_for_kubernetes_builds
+      wait_for_app_builds
+    end
+
+    def wait_for_app_builds(options = {})
+      status_check_interval = options[:status_check_interval] ||= 10
+      wait_for_pipelines(:build, @ciservice.builds[:app_layer], status_check_interval)
+    end
 
     def wait_for_kubernetes_builds(options = {})
       status_check_interval = options[:status_check_interval] ||= 10
@@ -96,14 +105,9 @@ module CrossCloudCi
       wait_for_pipelines(:provision, @ciservice.provisionings, status_check_interval)
     end
 
-    def wait_for_builds
-      wait_for_kubernetes_builds
-      wait_for_app_builds
-    end
-
-    def wait_for_app_builds
+    def wait_for_app_deploys(options = {})
       status_check_interval = options[:status_check_interval] ||= 10
-      wait_for_pipelines(:build, @ciservice.builds[:app_layer], status_check_interval)
+      wait_for_pipelines(:app_deploy, @ciservice.app_deploys, status_check_interval)
     end
 
     # wait_for_pipelines() - waits for a list of pipelines to complete (status other than running, created or nil)
@@ -124,11 +128,13 @@ module CrossCloudCi
             p[:pipeline_status] = @ciservice.build_status(p[:project_id],p[:pipeline_id])
           when :provision
             p[:pipeline_status] = @ciservice.provision_status(p[:pipeline_id])
-          when :app_deloy
+          when :app_deploy
             p[:pipeline_status] = @ciservice.app_deploy_status(p[:pipeline_id])
+          else
+            raise ArgumentError.new("Unknown pipeline type: #{pipeline_type}")
           end
 
-          @logger.debug "[TriggerClient] #{project_name} pipeline #{p[:pipeline_id]} status: #{p[:pipeline_status]}"
+          @logger.debug "[TriggerClient] #{project_name} #{pipeline_type.to_s} pipeline #{p[:pipeline_id]} status: #{p[:pipeline_status]}"
 
           case p[:pipeline_status]
           when "created","running",nil
