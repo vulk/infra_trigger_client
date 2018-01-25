@@ -1,5 +1,6 @@
 source 'https://rubygems.org'
-gem 'pstore'
+ruby '2.1.7'
+
 gem 'gitlab'
 gem 'prawn'
 gem 'json'
@@ -11,7 +12,6 @@ gem 'faraday'
 group :development, :test do
   gem 'byebug'
   #gem 'guard-rspec'
-  gem 'pry'
   gem 'rspec'
 end
 
