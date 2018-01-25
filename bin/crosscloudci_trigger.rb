@@ -1,16 +1,11 @@
 lib = File.expand_path('../../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-config_dir = File.expand_path("../../config", __FILE__)
 
-#require 'pry'
 require 'byebug'
 require 'logger'
 require 'date'
 require 'yaml/store'
-
-# CrossCloudCI::Common.init_config defined here
-require_relative "#{config_dir}/environment"
-require 'crosscloudci/ciservice_client'
+require 'crosscloudci/trigger_client'
 
 if ENV["CROSS_CLOUD_CI_ENV"]
   ci_env = ENV["CROSS_CLOUD_CI_ENV"]
@@ -232,10 +227,11 @@ def default_connect
   @tc.logger = Logger.new(STDOUT)
   @tc.logger.level = Logger::DEBUG
 
+  @logger.info "[TriggerClient] Dashboard API: #{@tc.config[:dashboard][:dashboard_api_host_port]}"
+
   @c = @tc.ciservice
   @c.logger = Logger.new(STDOUT)
   @c.logger.level = Logger::DEBUG
-  (@tc) ? true : false
 end
 
 def build_and_deploy_all_projects
@@ -258,7 +254,7 @@ def build_and_deploy_all_projects
   ## 2. Wait for a kubernetes build to complete
   #  Happy path:  continue no matter the status for both master/head continue (hoping/expecting success)
 
-  @tc.wait_for_kubernetes_builds
+  @tc.wait_for_kubernetes_builds({status_check_interval: 30})
 
   ## 3. Provision kubernetes to all active clouds
   # TODO: skip a provisioning a K8s if it fails to build
@@ -271,8 +267,8 @@ def build_and_deploy_all_projects
   #
   #  TODO: update provision all to skip kubernetes that failed to build eg. stable build was sucess but master failed
 
-  @tc.wait_for_kubernetes_provisionings
-  @tc.wait_for_app_builds
+  @tc.wait_for_kubernetes_provisionings({status_check_interval: 30})
+  @tc.wait_for_app_builds({status_check_interval: 30})
 
   ## 5. Deploy all active Apps to active clouds
   #
@@ -284,14 +280,16 @@ def build_and_deploy_all_projects
 
   # @tc.load_previous_app_deploys
 
+  @tc.wait_for_app_deploys({status_check_interval: 30})
 
   ## Cleanup resources
   @tc.deprovision_clouds
 end
 
+@logger = Logger.new(STDOUT)
+@logger.level = Logger::DEBUG
 
-logger = Logger.new(STDOUT)
-logger.level = Logger::DEBUG
+@logger.info "Environment: #{ENV['CROSS_CLOUD_CI_ENV']}"
 
 if $0 == "irb"
   puts welcome_message

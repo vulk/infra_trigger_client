@@ -21,7 +21,8 @@ module CrossCloudCI
       def initialize(config)
         @config = config
         @logger = Logger.new(STDOUT)
-        @logger.level = Logger::DEBUG
+        #@logger.level = Logger::DEBUG
+        @logger.level = Logger::INFO
 
         @project_name_id_mapping = {}
         @builds = { :provision_layer => [], :app_layer => [] }
