@@ -184,6 +184,17 @@ else
     @logger.info "[TriggerClient] Provisioning active clouds"
     @tc.load_previous_builds
     @tc.provision_clouds
+  when "app_deploy"
+    @logger.info "[TriggerClient] Provisioning active clouds"
+    @tc.load_previous_builds
+    @tc.load_previous_provisions
+    @tc.deploy_apps
+  when "test:dataload"
+    @logger.info "[TriggerClient] Testing data load from cache then exiting"
+    @tc.load_previous_builds
+    @tc.load_previous_provisions
+    @tc.load_previous_app_deploys
+    exit 0
   else
     @logger.info "[TriggerClient] Not sure what to do, so I'll just backup the data store :)"
   end

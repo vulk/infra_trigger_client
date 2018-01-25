@@ -26,9 +26,8 @@ Create a crontab entry like so:
 SHELL=/bin/bash
 CROSS_CLOUD_CI_ENV="production"
 CROSSCLOUDCI_TRIGGER_WORKDIR="/home/pair/src/wolfpack/cncf/crosscloudci-trigger"
-0 3 * * * CROSSCLOUDCI_TRIGGER_LOGFILE="crosscloudci_trigger-`date +\%Y\%m\%d-\%H:\%M:\%S\%z`.log" && $CROSSCLOUDCI_TRIGGER_WORKDIR/bin/crontrigger build_and_deploy > "$CROSSCLOUDCI_TRIGGER_WORKDIR/logs/$CROSSCLOUDCI_TRIGGER_LOGFILE" 2>&1
+# Using RVM: run rvm alias create crosscloudci_trigger ruby-2.1.7
+0 3 * * * source $HOME/.rvm/environments/crosscloudci_trigger && CROSSCLOUDCI_TRIGGER_LOGFILE="crosscloudci_trigger-`date +\%Y\%m\%d-\%H:\%M:\%S\%z`.log" && $CROSSCLOUDCI_TRIGGER_WORKDIR/bin/crontrigger build_and_deploy > "$CROSSCLOUDCI_TRIGGER_WORKDIR/logs/$CROSSCLOUDCI_TRIGGER_LOGFILE" 2>&1
 ```
 
-
-
-
+To just test cron functionality with out running a full build and deploy use the "test:dataload" command for crosscloudci_trigger/crontrigger instead of build_and_deploy
