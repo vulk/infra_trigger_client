@@ -1,9 +1,12 @@
+#!/usr/bin/env ruby
+
 lib = File.expand_path('../../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 
 require 'byebug'
 require 'logger'
 require 'date'
+require 'fileutils'
 require 'yaml/store'
 require 'crosscloudci/trigger_client'
 
@@ -19,151 +22,26 @@ end
 #store_file = "db/datastore-cidev-20180124-02:59:26-0500.yml"
 #store_file = "db/datastore-production-20180124-03:07:35-0500.yml"
 
+def backup_datastore
+  dt = DateTime.now.strftime("%Y%m%d-%H:%M:%S%z")
+  ci_env = ENV["CROSS_CLOUD_CI_ENV"] ||= ""
 
+  require 'securerandom'
+  backup_file_name = "datastore-#{ci_env}-#{dt}-#{SecureRandom.hex(16)}.yml"
 
+  cache_dir = File.join(File.expand_path('../../db', __FILE__), "cache")
+  FileUtils.mkdir_p(cache_dir)
 
+  backup_file_path = File.join(cache_dir, backup_file_name)
 
-## TODO: Subclass CiService client?
-module CrossCloudCi
-  class TriggerClient
-    attr_accessor :logger
-    attr_accessor :config, :ciservice, :data_store
+  backupfile = File.open(backup_file_path, "w")
+  dsf = File.open(File.expand_path(@tc.data_store.path), "r")
 
-    def initialize(options = {})
-      @config = CrossCloudCi::Common.init_config
-
-      if @config[:gitlab][:api_token].nil?
-        @logger.error "Global GitLab API token not set!"
-        exit 1
-      end
-
-      store_file = options[:store_file] 
-      if store_file.nil?
-        raise ArgumentError.new("TriggerClient requires a data store.  Pass :store_file option")
-      end
-      @data_store = YAML::Store.new(store_file)
-
-      @ciservice = CrossCloudCI::CiService.client(@config)
-    end
-
-    # TODO: maybe move build_active projects to trigger client?
-    def build_projects(options = {})
-      # Start builds and store data
-      @data_store.transaction do
-        @ciservice.build_active_projects
-        @data_store[:builds] = @ciservice.builds
-      end
-    end
-
-    def load_previous_builds
-      # Load previous build data
-      @ciservice.builds = @data_store.transaction { @data_store.fetch(:builds, @ciservice.builds) }
-    end
-
-
-    def provision_clouds
-      @data_store.transaction do
-        @ciservice.provision_active_clouds
-        # TODO: pull pipeline id for clouds just provisioned
-        @data_store[:provisionings] = @ciservice.provisionings
-      end
-    end
-
-    # Load previous provisioning data
-    def load_previous_provisions
-      @ciservice.provisionings = @data_store.transaction { @data_store.fetch(:provisionings, @ciservice.provisionings) }
-    end
-
-    def deploy_apps(options = {})
-      @data_store.transaction do
-        #@ciservice.app_deploy_to_active_clouds
-        #@ciservice.app_deploy_to_active_clouds({release_types: [:stable]})
-        @ciservice.app_deploy_to_active_clouds(options)
-
-        @data_store[:app_deploys] = @ciservice.app_deploys
-      end
-    end
-
-    def load_previous_app_deploys
-      @ciservice.app_deploys = @data_store.transaction { @data_store.fetch(:app_deploys, @ciservice.app_deploys) }
-    end
-
-    def deprovision_clouds
-      # destroy all provisionings
-      @ciservice.provisionings.each do |p|
-        @logger.info "[Deprovisioning] Deprovisioning #{p[:cloud]} for #{p[:project_name]} #{p[:target_project_ref]}"
-        @ciservice.deprovision_cloud(p[:pipeline_id])
-      end
-    end
-
-    def wait_for_builds(options = {})
-      wait_for_kubernetes_builds
-      wait_for_app_builds
-    end
-
-    def wait_for_app_builds(options = {})
-      status_check_interval = options[:status_check_interval] ||= 10
-      wait_for_pipelines(:build, @ciservice.builds[:app_layer], status_check_interval)
-    end
-
-    def wait_for_kubernetes_builds(options = {})
-      status_check_interval = options[:status_check_interval] ||= 10
-      wait_for_pipelines(:build, @ciservice.builds[:provision_layer], status_check_interval)
-    end
-
-    def wait_for_kubernetes_provisionings(options = {})
-      status_check_interval = options[:status_check_interval] ||= 10
-      wait_for_pipelines(:provision, @ciservice.provisionings, status_check_interval)
-    end
-
-    def wait_for_app_deploys(options = {})
-      status_check_interval = options[:status_check_interval] ||= 10
-      wait_for_pipelines(:app_deploy, @ciservice.app_deploys, status_check_interval)
-    end
-
-    # wait_for_pipelines() - waits for a list of pipelines to complete (status other than running, created or nil)
-    #
-    # args:
-    #     pipeline_type = :build | :provision | :app_deploy
-    #     pipelines = [{project_id1: <project_id>, pipeline_id2: <pipeline_id>}, {..}, ...]
-    #                  list of pipelines with associated project ids
-    def wait_for_pipelines(pipeline_type, pipelines = [], status_check_interval = 10)
-
-      active_pipelines = pipelines.clone
-      loop do
-        active_pipelines.reject! do |p|
-          project_name = @ciservice.project_name_by_id(p[:project_id])
-          
-          case pipeline_type
-          when :build
-            p[:pipeline_status] = @ciservice.build_status(p[:project_id],p[:pipeline_id])
-          when :provision
-            p[:pipeline_status] = @ciservice.provision_status(p[:pipeline_id])
-          when :app_deploy
-            p[:pipeline_status] = @ciservice.app_deploy_status(p[:pipeline_id])
-          else
-            raise ArgumentError.new("Unknown pipeline type: #{pipeline_type}")
-          end
-
-          @logger.debug "[TriggerClient] #{project_name} #{pipeline_type.to_s} pipeline #{p[:pipeline_id]} status: #{p[:pipeline_status]}"
-
-          case p[:pipeline_status]
-          when "created","running",nil
-            false
-          else
-            true
-          end
-        end
-
-        break if active_pipelines.empty?
-
-        sleep status_check_interval
-      end until active_pipelines.empty?
-    end
-  end
+  FileUtils.copy_stream(dsf, backupfile)
+  backupfile.close
+  dsf.close
+  @logger.info "[TriggerClient] Backed up data store to #{backup_file_path}"
 end
-
-
 
 def trigger_help
   puts <<-EOM
@@ -294,7 +172,21 @@ end
 if $0 == "irb"
   puts welcome_message
 else
-  build_and_deploy_all_projects
-end
+  default_connect
+  case ARGV[0]
+  when "run_all","runall","build_and_deploy"
+    @logger.info "[TriggerClient] Building and deploying everything"
+    build_and_deploy_all_projects
+  when "build"
+    @logger.info "[TriggerClient] Building active projects"
+    @tc.build_projects
+  when "provision"
+    @logger.info "[TriggerClient] Provisioning active clouds"
+    @tc.load_previous_builds
+    @tc.provision_clouds
+  else
+    @logger.info "[TriggerClient] Not sure what to do, so I'll just backup the data store :)"
+  end
 
-__END__
+  backup_datastore
+end
