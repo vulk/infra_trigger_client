@@ -135,7 +135,7 @@ module CrossCloudCi
 
     def deprovision_clouds
       # destroy all provisionings
-      @ciservice.provisionings do |p|
+      @ciservice.provisionings.each do |p|
         @logger.info "[Deprovisioning] Deprovisioning #{p[:cloud]} for #{p[:project_name]} #{p[:target_project_ref]}"
         @ciservice.deprovision_cloud(p[:pipeline_id])
       end
