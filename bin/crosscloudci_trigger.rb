@@ -112,6 +112,19 @@ def default_connect
   @c.logger.level = Logger::DEBUG
 end
 
+def deploy_apps
+  @tc.deploy_apps
+end
+
+def provision_clouds
+  @tc.provision_clouds
+end
+
+def build_projects
+  @tc.build_projects
+end
+
+
 def build_and_deploy_all_projects
   default_connect
 
