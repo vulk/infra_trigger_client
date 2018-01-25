@@ -12,6 +12,22 @@ require 'yaml/store'
 require_relative "#{config_dir}/environment"
 require 'crosscloudci/ciservice_client'
 
+if ENV["CROSS_CLOUD_CI_ENV"]
+  ci_env = ENV["CROSS_CLOUD_CI_ENV"]
+else
+  ci_env = "development"
+end
+
+#dt = DateTime.now.strftime("%Y%m%d-%H:%M:%S%z")
+#store_file = "db/datastore-#{ci_env}-#{dt}.yml"
+@store_file = "db/datastore-#{ci_env}.yml"
+#store_file = "db/datastore-cidev-20180124-02:59:26-0500.yml"
+#store_file = "db/datastore-production-20180124-03:07:35-0500.yml"
+
+
+
+
+
 ## TODO: Subclass CiService client?
 module CrossCloudCi
   class TriggerClient
@@ -152,6 +168,8 @@ module CrossCloudCi
   end
 end
 
+
+
 def trigger_help
   puts <<-EOM
 # Methods for Trigger Client
@@ -209,21 +227,6 @@ Set debugging level with @tc.logger.level and @tc.ciservice.logger.level
 EOM
 end
 
-if ENV["CROSS_CLOUD_CI_ENV"]
-  ci_env = ENV["CROSS_CLOUD_CI_ENV"]
-else
-  ci_env = "development"
-end
-
-#dt = DateTime.now.strftime("%Y%m%d-%H:%M:%S%z")
-#store_file = "db/datastore-#{ci_env}-#{dt}.yml"
-@store_file = "db/datastore-#{ci_env}.yml"
-#store_file = "db/datastore-cidev-20180124-02:59:26-0500.yml"
-#store_file = "db/datastore-production-20180124-03:07:35-0500.yml"
-
-@logger = Logger.new(STDOUT)
-@logger.level = Logger::DEBUG
-
 def default_connect
   @tc = CrossCloudCi::TriggerClient.new({store_file: @store_file})
   @tc.logger = Logger.new(STDOUT)
@@ -232,15 +235,14 @@ def default_connect
   @c = @tc.ciservice
   @c.logger = Logger.new(STDOUT)
   @c.logger.level = Logger::DEBUG
+  (@tc) ? true : false
 end
 
-if $0 == "irb"
-  puts welcome_message
-else
+def build_and_deploy_all_projects
   default_connect
 
   ###############################################################
-  ## Steps for 3am scheduler
+  ## Build, provision and deploy steps
   ###############################################################
 
   ## 1. Build all projects
@@ -285,7 +287,16 @@ else
 
   ## Cleanup resources
   @tc.deprovision_clouds
+end
 
+
+logger = Logger.new(STDOUT)
+logger.level = Logger::DEBUG
+
+if $0 == "irb"
+  puts welcome_message
+else
+  build_and_deploy_all_projects
 end
 
 __END__

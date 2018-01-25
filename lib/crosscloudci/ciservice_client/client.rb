@@ -654,31 +654,33 @@ module CrossCloudCI
       end
 
       def load_project_data
+
         if @active_projects.nil?
+          @logger.info "[CiService] Loading active projects"
           # Create hash of active projects from cross-cloud.yml data
           @active_projects = @config[:projects].select {|p| p if @config[:projects][p]["active"] == true }
         end
 
         if @all_gitlab_projects.nil?
+          @logger.info "[CiService] Loading GitLab project data"
           @all_gitlab_projects = @gitlab_proxy.get_projects
         end
 
         if @active_gitlab_projects.nil?
+          @logger.info "[CiService] Creating data mappings"
           @active_gitlab_projects = @all_gitlab_projects.collect do |agp|
             agp_name = agp["name"].downcase
             proj_id = agp["id"]
             if agp_name == "cross-cloud" || agp_name == "cross-project"
-              puts "Creating mapping for #{agp_name}"
+              #@logger.debug "[CiService] Load GitLab Project - Creating mapping for #{agp_name}"
               @project_name_id_mapping[proj_id] = agp_name
               @project_name_id_mapping[agp_name] = proj_id
               nil
             elsif @active_projects[agp_name]
-              puts "adding gitlab data to active projects for #{agp_name}"
+              #@logger.debug "[CiService] Load Project - Adding gitlab data to active projects for #{agp_name} (#{proj_id})"
               @active_projects[agp_name]["gitlab_data"] = agp
 
-              @logger.debug "#{agp_name} project id: #{proj_id}"
               # Support looking up project by id
-              #@project_id_by_name[p_id] = @active_projects[agp_name]
               @project_name_id_mapping[proj_id] = agp_name
               @project_name_id_mapping[agp_name] = proj_id
               agp
