@@ -49,24 +49,6 @@ module CrossCloudCi
       @ciservice.builds = @data_store.transaction { @data_store.fetch(:builds, @ciservice.builds) }
     end
 
-    def wait_for_kubernetes_builds(options = {})
-      status_check_interval = options[:status_check_interval] ||= 10
-      active_k8s_builds=@ciservice.builds[:provision_layer].count
-      while active_k8s_builds > 0
-        @ciservice.builds[:provision_layer].each do |b|
-          b[:pipeline_status] = @ciservice.build_status(b[:project_id],b[:pipeline_id])
-          @logger.debug "[Build] #{b[:project_name]} pipeline #{b[:pipeline_id]} status: #{b[:pipeline_status]}"
-          # next if b[:pipeline_status] == "running"
-
-          case b[:pipeline_status]
-          when "created","running",nil
-            next
-          end
-          active_k8s_builds -= 1
-        end
-        sleep status_check_interval #if active_k8s_builds > 0
-      end
-    end
 
     def provision_clouds
       @data_store.transaction do
@@ -79,44 +61,6 @@ module CrossCloudCi
     # Load previous provisioning data
     def load_previous_provisions
       @ciservice.provisionings = @data_store.transaction { @data_store.fetch(:provisionings, @ciservice.provisionings) }
-    end
-
-
-    def wait_for_kubernetes_provisionings
-      #latest_k8s_builds = @builds[:provision_layer].sort! {|x,y| x[:pipeline_id] <=> y[:pipeline_id]}.slice(-2,2)
-
-      active_provisionings=@ciservice.provisionings.count
-      while active_provisionings > 0
-        @ciservice.provisionings.each do |p|
-          #p[:pipeline_status] = @ciservice.build_status(p[:project_id],p[:pipeline_id])
-          p[:pipeline_status] = @ciservice.provision_status(p[:pipeline_id])
-          @logger.debug "[Provisioning] #{p[:project_name]} pipeline #{p[:pipeline_id]} status: #{p[:pipeline_status]}"
-          case p[:pipeline_status]
-          when "created","running",nil
-            next
-          end
-          # next if p[:pipeline_status] == "running"
-          active_provisionings -= 1
-        end
-        sleep 10 #if active_provisionings > 0
-      end
-    end
-
-    def wait_for_app_builds
-      active_app_builds=@ciservice.builds[:app_layer].count
-      while active_app_builds > 0
-        @ciservice.builds[:app_layer].each do |b|
-          b[:pipeline_status] = @ciservice.build_status(b[:project_id],b[:pipeline_id])
-          @logger.debug "[Builds] #{b[:project_name]} pipeline #{b[:pipeline_id]} status: #{b[:pipeline_status]}"
-
-          case b[:pipeline_status]
-          when "created","running",nil
-            next
-          end
-          active_app_builds -= 1
-        end
-        sleep 10 #if active_app_builds > 0
-      end
     end
 
     def deploy_apps(options = {})
@@ -139,6 +83,65 @@ module CrossCloudCi
         @logger.info "[Deprovisioning] Deprovisioning #{p[:cloud]} for #{p[:project_name]} #{p[:target_project_ref]}"
         @ciservice.deprovision_cloud(p[:pipeline_id])
       end
+    end
+
+
+    def wait_for_kubernetes_builds(options = {})
+      status_check_interval = options[:status_check_interval] ||= 10
+      wait_for_pipelines(:build, @ciservice.builds[:provision_layer], status_check_interval)
+    end
+
+    def wait_for_kubernetes_provisionings(options = {})
+      status_check_interval = options[:status_check_interval] ||= 10
+      wait_for_pipelines(:provision, @ciservice.provisionings, status_check_interval)
+    end
+
+    def wait_for_builds
+      wait_for_kubernetes_builds
+      wait_for_app_builds
+    end
+
+    def wait_for_app_builds
+      status_check_interval = options[:status_check_interval] ||= 10
+      wait_for_pipelines(:build, @ciservice.builds[:app_layer], status_check_interval)
+    end
+
+    # wait_for_pipelines() - waits for a list of pipelines to complete (status other than running, created or nil)
+    #
+    # args:
+    #     pipeline_type = :build | :provision | :app_deploy
+    #     pipelines = [{project_id1: <project_id>, pipeline_id2: <pipeline_id>}, {..}, ...]
+    #                  list of pipelines with associated project ids
+    def wait_for_pipelines(pipeline_type, pipelines = [], status_check_interval = 10)
+
+      active_pipelines = pipelines.clone
+      loop do
+        active_pipelines.reject! do |p|
+          project_name = @ciservice.project_name_by_id(p[:project_id])
+          
+          case pipeline_type
+          when :build
+            p[:pipeline_status] = @ciservice.build_status(p[:project_id],p[:pipeline_id])
+          when :provision
+            p[:pipeline_status] = @ciservice.provision_status(p[:pipeline_id])
+          when :app_deloy
+            p[:pipeline_status] = @ciservice.app_deploy_status(p[:pipeline_id])
+          end
+
+          @logger.debug "[TriggerClient] #{project_name} pipeline #{p[:pipeline_id]} status: #{p[:pipeline_status]}"
+
+          case p[:pipeline_status]
+          when "created","running",nil
+            false
+          else
+            true
+          end
+        end
+
+        break if active_pipelines.empty?
+
+        sleep status_check_interval
+      end until active_pipelines.empty?
     end
   end
 end
