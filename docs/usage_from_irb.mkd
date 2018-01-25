@@ -2,26 +2,40 @@
 
 The trigger client can be used from an IRB prompt
 
-### Setup / Configuration
+## Setup / Configuration
 
 See README and do initial setup.
 
 Setup environment settings, especially the CROSS_CLOUD_CI_ENV variable
   eg. export CROSS_CLOUD_CI_ENV=development
 
-Start irb
+The Dashboard API host can be overrided with by setting the environment variable DASHBOARD_API_HOST_PORT. eg. `export DASHBOARD_API_HOST_PORT="vidar.vu.lk:4002"`
 
-require './bin/crosscloudci_trigger'
 
-@c has the CI client with a connection to Gitlab established
-@c.config has the configuration loaded
+## Runtime usage
 
-To override the dashboard_api_host_port do the following
+Start irb and load the main trigger client
 
-@c.config[:dashboard][:dashboard_api_host_port] = "vidar.vu.lk:4002"
+- `irb -r ./bin/crosscloudci_trigger.rb`
 
-or set the environment variable DASHBOARD_API_HOST_PORT. eg. `export DASHBOARD_API_HOST_PORT="vidar.vu.lk:4002"
+### Quick Start - default_connect
 
+Type `default_connect` to use default configuration and establish a Ci service connection
+
+@tc is the trigger client
+
+@tc.ciservice or @c is the CI client with a connection to Gitlab established
+
+The configuration can be accessed via @tc.config
+
+To override the dashboard_api_host_port do one of the following
+
+- Update the runtime configuration through config[:dashboard][:dashboard_api_host_port] eg.  `@c.config[:dashboard][:dashboard_api_host_port] = "vidar.vu.lk:4002"`
+
+
+### Manually configure and connect
+
+TBD
 
 ### Building projects
 
