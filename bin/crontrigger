@@ -1,0 +1,24 @@
+#!/bin/bash
+
+## Crontab example
+
+# SHELL=/bin/bash
+# CROSS_CLOUD_CI_ENV="production"
+# 0 3 * * * CROSSCLOUDCI_TRIGGER_LOGFILE="crosscloudci_trigger-`date +\%Y\%m\%d-\%H:\%M:\%S\%z`.log" && /home/pair/s    rc/taylor/cncf/crosscloudci-trigger/bin/crontrigger build_and_deploy > "/home/pair/src/taylor/cncf/crosscloudci-tr    igger/logs/$CROSSCLOUDCI_TRIGGER_LOGFILE" 2>&1 
+
+working_dir="$HOME/src/taylor/cncf/crosscloudci-trigger"
+
+# Created with rvm alias create crosscloudci_trigger ruby-2.1.7
+source $HOME/.rvm/environments/crosscloudci_trigger 
+
+cd $working_dir
+
+[[ -n "$CROSS_CLOUD_CI_ENV" ]] && save_ci_env="$CROSS_CLOUD_CI_ENV"
+
+source .env
+
+[[ -n "$save_ci_env" ]] && export CROSS_CLOUD_CI_ENV="$save_ci_env"
+
+echo $CROSS_CLOUD_CI_ENV
+
+ruby "$working_dir/bin/crosscloudci_trigger.rb" $@
