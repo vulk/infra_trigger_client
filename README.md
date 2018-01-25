@@ -18,3 +18,17 @@ TBD
 
 See [usage from IRB](docs/usage_from_irb.mkd)
 
+### From cron
+
+Create a crontab entry like so:
+
+```
+SHELL=/bin/bash
+CROSS_CLOUD_CI_ENV="production"
+CROSSCLOUDCI_TRIGGER_WORKDIR="/home/pair/src/wolfpack/cncf/crosscloudci-trigger"
+0 3 * * * CROSSCLOUDCI_TRIGGER_LOGFILE="crosscloudci_trigger-`date +\%Y\%m\%d-\%H:\%M:\%S\%z`.log" && $CROSSCLOUDCI_TRIGGER_WORKDIR/bin/crontrigger build_and_deploy > "$CROSSCLOUDCI_TRIGGER_WORKDIR/logs/$CROSSCLOUDCI_TRIGGER_LOGFILE" 2>&1
+```
+
+
+
+
