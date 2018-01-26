@@ -113,20 +113,23 @@ def default_connect
 end
 
 def deploy_apps
+  default_connect unless @tc
   @tc.deploy_apps
 end
 
 def provision_clouds
+  default_connect unless @tc
   @tc.provision_clouds
 end
 
 def build_projects
+  default_connect unless @tc
   @tc.build_projects
 end
 
 
 def build_and_deploy_all_projects
-  default_connect
+  default_connect unless @tc
 
   ###############################################################
   ## Build, provision and deploy steps
