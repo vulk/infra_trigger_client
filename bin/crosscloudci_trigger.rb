@@ -187,12 +187,18 @@ end
 
 if $0 == "irb"
   puts welcome_message
+  puts "Environment: #{ENV['CROSS_CLOUD_CI_ENV']}" unless ENV['CROSS_CLOUD_CI_ENV'].nil?
 else
   default_connect
   case ARGV[0]
   when "run_all","runall","build_and_deploy"
     @logger.info "[TriggerClient] Building and deploying everything"
     build_and_deploy_all_projects
+  when "build_and_provision"
+    @logger.info "[TriggerClient] Building active projects"
+    @tc.build_projects
+    @logger.info "[TriggerClient] Provisioning active clouds"
+    @tc.provision_clouds
   when "build"
     @logger.info "[TriggerClient] Building active projects"
     @tc.build_projects
