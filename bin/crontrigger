@@ -12,6 +12,11 @@
 #source /usr/local/rvm/environments/crosscloudci_trigger 
 #source $HOME/.rvm/environments/crosscloudci_trigger 
 
+mypath=$(dirname $0)
+working_dir=$(dirname $mypath)
+
+echo "[Cron trigger] Working dir: $working_dir"
+
 cd $working_dir
 
 [[ -n "$CROSS_CLOUD_CI_ENV" ]] && save_ci_env="$CROSS_CLOUD_CI_ENV"
@@ -20,6 +25,6 @@ source .env
 
 [[ -n "$save_ci_env" ]] && export CROSS_CLOUD_CI_ENV="$save_ci_env"
 
-echo $CROSS_CLOUD_CI_ENV
+echo "[Cron trigger] CROSS_CLOUD_CI_ENV=$CROSS_CLOUD_CI_ENV"
 
 ruby "$working_dir/bin/crosscloudci_trigger.rb" $@
