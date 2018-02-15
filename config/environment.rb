@@ -62,6 +62,9 @@ module CrossCloudCi
             },
             "linkerd" => {
               :api_token => ENV["GITLAB_LINKERD_TOKEN"]
+            },
+            "fluentd" => {
+              :api_token => ENV["GITLAB_FLUENTD_TOKEN"]
             }
           }
         }
