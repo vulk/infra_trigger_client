@@ -412,6 +412,8 @@ module CrossCloudCI
 
         target_project_name = project_name_by_id(target_project_id)
         org_name = config[:projects][target_project_name]["project_url"].split("/")[3]
+        stable_chart = config[:projects][target_project_name]["stable_chart"]
+        head_chart = config[:projects][target_project_name]["head_chart"]
 
         ####################################
         # TODO: move this out
@@ -447,9 +449,13 @@ module CrossCloudCI
         if options[:chart_repo]
           trigger_variables[:CHART_REPO] = options[:chart_repo] unless options[:chart_repo].nil?
         else
-          trigger_variables[:CHART_REPO] = "stable"
-          # TODO: pull chart repo from config
-          #trigger_variables[:CHART_REPO] = @config...
+          if target_project_ref.downcase == "master"
+            trigger_variables[:CHART_REPO] = head_chart
+            @logger.info "Selecting stable_chart #{head_chart}"
+          else
+            @logger.info "Selecting stable_chart #{stable_chart}"
+            trigger_variables[:CHART_REPO] = stable_chart
+          end
         end
         # trigger_variables[:FILTER] = options[:filter] unless options[:filter].nil?
         # trigger_variables[:LABEL_ARGS] = options[:label_args] unless options[:label_args].nil?
