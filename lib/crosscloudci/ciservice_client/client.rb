@@ -40,12 +40,9 @@ module CrossCloudCI
       def build_project(project_id, ref, options = {})
         project_name = project_name_by_id(project_id)
 
-        @logger.debug "options: #{@options}"
-        
         if options[:api_token]
           api_token = options[:api_token]
         else
-          @logger.debug "config: #{@config} project_name: #{project_name}"
           api_token = @config[:gitlab][:pipeline][project_name][:api_token]
         end
 
