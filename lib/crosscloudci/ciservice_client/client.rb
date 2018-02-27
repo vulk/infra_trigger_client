@@ -40,9 +40,12 @@ module CrossCloudCI
       def build_project(project_id, ref, options = {})
         project_name = project_name_by_id(project_id)
 
+        @logger.debug "options: #{@options}"
+        
         if options[:api_token]
           api_token = options[:api_token]
         else
+          @logger.debug "config: #{@config} project_name: #{project_name}"
           api_token = @config[:gitlab][:pipeline][project_name][:api_token]
         end
 
@@ -633,11 +636,6 @@ module CrossCloudCI
               deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][release_key_name] }.first
 
               @logger.info "[App Deploy] Deploying to #{cloud_name} running Kubernetes #{deployment_env[:target_project_ref]} provisioned in pipeline #{deployment_env[:pipeline_id]}"
-
-              # TODO: pull chart repo from config
-              options = {
-                chart_repo: "stable"
-              }
 
               @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{deployment_env[:pipeline_id]}, #{cloud_name}, #{options})"
 
