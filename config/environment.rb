@@ -65,6 +65,9 @@ module CrossCloudCi
             },
             "fluentd" => {
               :api_token => ENV["GITLAB_FLUENTD_TOKEN"]
+            },
+            "so" => {
+              :api_token => ENV["GITLAB_SO_TOKEN"]
             }
           }
         }
