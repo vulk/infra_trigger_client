@@ -22,6 +22,18 @@ module CrossCloudCi
         cross_cloud_ref="production"
         cross_project_ref="production"
         dashboard_api_host_port="productionapi.cncf.ci"
+      when "demo"
+        gitlab_base_url="https://gitlab.demo.cncf.ci"
+        cross_cloud_yml="https://raw.githubusercontent.com/crosscloudci/cncf-configuration/production/cross-cloud.yml"
+        cross_cloud_ref="production"
+        cross_project_ref="production"
+        dashboard_api_host_port="demoapi.cncf.ci"
+      when "onapdemo"
+        gitlab_base_url="https://gitlab.onap.cncf.ci"
+        cross_cloud_yml="https://raw.githubusercontent.com/crosscloudci/cncf-configuration/production/cross-cloud.yml"
+        cross_cloud_ref="production"
+        cross_project_ref="production"
+        dashboard_api_host_port="onapapi.cncf.ci"
       # Default
       else
         gitlab_base_url="https://gitlab.dev.cncf.ci"
@@ -31,7 +43,12 @@ module CrossCloudCi
         dashboard_api_host_port="devapi.cncf.ci"
       end
 
+      # Environment overrides
       dashboard_api_host_port = ENV["DASHBOARD_API_HOST_PORT"] unless ENV["DASHBOARD_API_HOST_PORT"].nil?
+      gitlab_base_url = ENV["GITLAB_BASE_URL"] unless ENV["GITLAB_BASE_URL"].nil?
+      cross_cloud_yml = ENV["CROSS_CLOUD_YML"] unless ENV["CROSS_CLOUD_YML"].nil?
+      cross_cloud_ref = ENV["CROSS_CLOUD_REF"] unless ENV["CROSS_CLOUD_REF"].nil?
+      cross_project_ref = ENV["CROSS_PROJECT_REF"] unless ENV["CROSS_PROJECT_REF"].nil?
 
       @config = {
         :cross_cloud_yml => cross_cloud_yml,
