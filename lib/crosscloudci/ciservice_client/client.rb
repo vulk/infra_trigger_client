@@ -347,6 +347,10 @@ module CrossCloudCI
             when :stable
               kubernetes_build = kubernetes_stable
             else
+              if cloud_name == "packet"
+                @logger.info "Waiting 60 seconds for next Packet API call"
+                sleep 60
+              end
               kubernetes_build = kubernetes_head
             end
 
