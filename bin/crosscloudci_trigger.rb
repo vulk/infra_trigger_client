@@ -180,6 +180,37 @@ def build_and_deploy_all_projects
   @tc.deprovision_clouds
 end
 
+
+def build_project(project_name, ref_name)
+  if project_name.nil? or ref_name.nil?
+    puts "Error: project name and ref required!"
+    return nil
+  end
+
+  project_id = @tc.ciservice.project_id_by_name(project_name)
+
+  opts = {:dashboard_api_host_port => @tc.config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @tc.config[:cross_cloud_yml]}
+
+  @tc.ciservice.build_project(project_id, ref_name, opts)
+end
+
+def deploy_k8s(ref_name, cloud)
+  build_info = build_project("kubernetes", ref_name)
+  pipeline_id = build_info[:pipeline_id]
+
+  # TODO: wait for build to complete for k8s
+
+  @tc.ciservice.provision_cloud(cloud,
+                                { kubernetes_build_id: pipeline_id,
+                                  kubernetes_ref: ref_name,
+                                  dashboard_api_host_port: @c.config[:dashboard][:dashboard_api_host_port],
+                                  cross_cloud_yml: @c.config[:cross_cloud_yml],
+                                  :api_token => @c.config[:gitlab][:pipeline]["cross-cloud"][:api_token],
+                                  provision_ref: @c.config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]
+                                }
+                               ) 
+end
+
 @logger = Logger.new(STDOUT)
 @logger.level = Logger::DEBUG
 
