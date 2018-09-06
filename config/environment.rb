@@ -85,6 +85,9 @@ module CrossCloudCi
             },
             "so" => {
               :api_token => ENV["GITLAB_SO_TOKEN"]
+            },
+            "envoy" => {
+              :api_token => ENV["GITLAB_ENVOY_TOKEN"]
             }
           }
         }
