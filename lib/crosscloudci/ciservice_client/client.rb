@@ -415,7 +415,8 @@ module CrossCloudCI
         trigger_ref = @config[:gitlab][:pipeline][trigger_project_name][:cross_project_ref]
 
         target_project_name = project_name_by_id(target_project_id)
-        org_name = config[:projects][target_project_name]["project_url"].split("/")[3]
+        # org_name = config[:projects][target_project_name]["project_url"].split("/")[3]
+        org_name = config[:projects][target_project_name]["repository_url"].split("/")[3]
         stable_chart = config[:projects][target_project_name]["stable_chart"]
         head_chart = config[:projects][target_project_name]["head_chart"]
 
