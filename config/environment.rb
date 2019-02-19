@@ -42,7 +42,7 @@ module CrossCloudCi
         cross_cloud_yml="https://raw.githubusercontent.com/crosscloudci/cncf-configuration/master/cross-cloud.yml"
         cross_cloud_ref="master"
         cross_project_ref="master"
-        dashboard_api_host_port="dev.vulk.co:4002"
+        dashboard_api_host_port="devapi.cncf.ci"
       end
 
       # Environment overrides
