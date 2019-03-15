@@ -133,7 +133,7 @@ module CrossCloudCI
           project_id =  all_gitlab_projects.select {|agp| agp["name"].downcase == name}.first["id"]
 
           ["stable_ref", "head_ref"].each do |release_key_name|
-            next if name == "kubernetes" and release_key_name == "head_ref"
+            #next if name == "kubernetes" and release_key_name == "head_ref"
             ref = @config[:projects][name][release_key_name]
             puts "Calling build_project(#{project_id}, #{ref}, #{trigger_variables})"
             #self.build_project(project_id, api_token, ref, trigger_variables)
@@ -343,26 +343,25 @@ module CrossCloudCI
 
         # NOTE: disabling HEAD for https://github.com/crosscloudci/crosscloudci/issues/124
         # TODO: refactor to support multiple k8s environments (eg. RC, HEAD, arm)
-        #kubernetes_head = latest_k8s_builds.select {|b| b[:ref] == "master" }.first
+        kubernetes_head = latest_k8s_builds.select {|b| b[:ref] == "master" }.first
         kubernetes_stable = latest_k8s_builds.select {|b| b[:ref] != "master" }.first
 
         @active_clouds.each do |cloud|
           cloud_name = cloud[0]
-          #next unless cloud_name == "gce"
           @logger.info "Active cloud: #{cloud_name}"
 
           # TODO: refactor to support multiple k8s environments (eg. RC, HEAD, arm)
-          [:stable].each do |release|
+          [:stable, :head].each do |release|
             case release
             when :stable
               kubernetes_build = kubernetes_stable
             # NOTE: wait time not needed while only using stable. refactor for multiple envs
-            # else
-            #   if cloud_name == "packet"
-            #     @logger.info "Waiting 600 seconds for next Packet API call"
-            #     sleep 600
-            #   end
-            #   kubernetes_build = kubernetes_head
+            else
+              # if cloud_name == "packet"
+              #   @logger.info "Waiting 600 seconds for next Packet API call"
+              #   sleep 600
+              # end
+              kubernetes_build = kubernetes_head
             end
 
             build_id = kubernetes_build[:pipeline_id] 
@@ -603,6 +602,7 @@ module CrossCloudCI
         # - loop for stable and head/master on each project
         # - loop for active clouds on the current ref (stable/head)
 
+        # NOTE: These are the key names in the cross-cloud.yml
         default_release_ref_keys = ["stable_ref", "head_ref"]
 
         release_types = options[:release_types] ||= [:stable, :head]
@@ -611,10 +611,10 @@ module CrossCloudCI
 
         release_types.each do |rt|
           case rt
-          when [:stable]
-            release_ref_keys << ["stable_ref"]
-          when [:head]
-            release_ref_keys << ["head_ref"]
+          when :stable
+            release_ref_keys << "stable_ref"
+          when :head
+            release_ref_keys << "head_ref"
           else
             @logger.warn "[App Deploy Loop] Invalid release type given #{release_types}"
           end
@@ -631,6 +631,8 @@ module CrossCloudCI
 
           trigger_variables = {}
 
+          @logger.info "[App Deploy] release key names #{release_ref_keys}"
+
           #["stable_ref", "head_ref"].each do |release_key_name|
           release_ref_keys.each do |release_key_name|
             project_ref = @config[:projects][project_name][release_key_name]
@@ -644,20 +646,23 @@ module CrossCloudCI
 
             @active_clouds.each do |cloud|
               cloud_name = cloud[0]
-              #next unless cloud_name == "gce"
               @logger.info "[App Deploy] Active cloud: #{cloud_name}"
 
               # kubernetes environment we will deploy to 
               #deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][release_key_name] }.first
               # NOTE: Only deploying to stable K8s for https://github.com/crosscloudci/crosscloudci/issues/124
               # TODO: Refactor to support multiple test environments
-              deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"]["stable_ref"] }.first
 
-              @logger.info "[App Deploy] Deploying to #{cloud_name} running Kubernetes #{deployment_env[:target_project_ref]} provisioned in pipeline #{deployment_env[:pipeline_id]}"
+              deployment_env = []
+              ["stable_ref", "head_ref"].each do |k8s_release_ref|
+                deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }.first
 
-              @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{deployment_env[:pipeline_id]}, #{cloud_name}, #{options})"
+                @logger.info "[App Deploy] Deploying to #{cloud_name} running Kubernetes #{deployment_env[:target_project_ref]} provisioned in pipeline #{deployment_env[:pipeline_id]}"
 
-              self.app_deploy(project_id, project_build_id, deployment_env[:pipeline_id], cloud_name, options)
+                @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{deployment_env[:pipeline_id]}, #{cloud_name}, #{options})"
+
+                self.app_deploy(project_id, project_build_id, deployment_env[:pipeline_id], cloud_name, options)
+              end
             end
           end
 
