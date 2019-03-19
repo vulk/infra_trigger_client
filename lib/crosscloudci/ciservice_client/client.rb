@@ -17,6 +17,7 @@ module CrossCloudCI
       attr_accessor :projects, :active_projects,  :all_gitlab_projects, :active_gitlab_projects, :active_clouds
       attr_accessor :builds, :builds2, :app_deploys, :provisionings
 
+
       #def initialize(options = {})
       def initialize(config)
         @config = config
@@ -435,6 +436,32 @@ module CrossCloudCI
         # TODO: pull cloud from provisioning
         cross_cloud_id = project_id_by_name("cross-cloud")
         cross_cloud_api_token = @config[:gitlab][:pipeline]["cross-cloud"][:api_token]
+
+
+        deployment_env = @provisionings.select {|p| p[:pipeline_id] == target_provision_id}.first
+
+        if deployment_env.nil?
+          raise CrossCloudCi::CiServiceError.new("Kubernetes provisioning could not be found for Gitlab pipeline id #{pipeline_id}")
+        end
+
+        kubernetes_release_type = "stable"
+
+        deployment_env[:target_project_ref].each do |ref|
+          case ref
+          when "master"
+            kubernetes_release_type = "head"
+          else
+            kubernetes_release_type = "stable"
+          end
+        end
+
+        trigger_variables[:KUBERNETES_RELEASE_TYPE] = kubernetes_release_type
+        trigger_variables[:PROVISION_PIPELINE_ID] = target_provision_id # cross-cloud k8s provisioning
+
+        # How to determine test env for the selector
+        # 1. release type => stable / head
+        # 2. target provision id = cross-cloud pipeline id
+        #    * kubernetes ref (commit or version) can be derived
 
 
         # Retrieve Kubeconfig for the target cloud which was previously provisioned
