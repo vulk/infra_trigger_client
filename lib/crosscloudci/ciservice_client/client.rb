@@ -54,6 +54,16 @@ module CrossCloudCI
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
 
+        # TODO: add global default
+        trigger_variables[:ARCH] = options[:arch] ||= "amd64"
+
+        # TODO: Lookup arch support for each project.  
+        # NOTE: Only supporting k8s for arm 
+        if project_name != "kubernetes" and options[:arch] != "amd64"
+            @logger.info "[Build] No #{options[:arch]} support for #{project_name}"
+            return
+        end
+
         gitlab_result = nil
         tries=3
         begin
@@ -121,14 +131,11 @@ module CrossCloudCI
         load_project_data
         @active_projects.each do |proj|
           name = proj[0]
-          #next unless name == "linkerd"
 
           puts "Active project: #{name}"
-          #next if name == "kubernetes"
-          #next if name == "prometheus"
 
           @logger.debug "setting trigger variables"
-          trigger_variables = {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]}
+          options = {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]}
 
           @logger.debug "setting project id"
           project_id =  all_gitlab_projects.select {|agp| agp["name"].downcase == name}.first["id"]
@@ -136,9 +143,17 @@ module CrossCloudCI
           ["stable_ref", "head_ref"].each do |release_key_name|
             #next if name == "kubernetes" and release_key_name == "head_ref"
             ref = @config[:projects][name][release_key_name]
-            puts "Calling build_project(#{project_id}, #{ref}, #{trigger_variables})"
-            #self.build_project(project_id, api_token, ref, trigger_variables)
-            self.build_project(project_id, ref, trigger_variables)
+
+            # TODO: check for arch support on the provider?
+            arch_types = ["amd64", "arm64"]
+
+            arch_types.each do |machine_arch|
+              options[:arch] = machine_arch
+
+              puts "Calling build_project(#{project_id}, #{ref}, #{options})"
+              #self.build_project(project_id, api_token, ref, options)
+              self.build_project(project_id, ref, options)
+            end
           end
         end
       end
@@ -198,6 +213,9 @@ module CrossCloudCI
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         #trigger_variables[:CROSS_CLOUD_YML] = options[:cross_cloud_yml] unless options[:cross_cloud_yml].nil?
         trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
+
+        # TODO: add global default arch eg. @default_arch = "amd64"
+        trigger_variables[:ARCH] = options[:arch] ||= "amd64"
 
         gitlab_result = nil
         tries=3
@@ -375,11 +393,17 @@ module CrossCloudCI
               kubernetes_build_id: build_id,
               kubernetes_ref: ref,
               api_token: @config[:gitlab][:pipeline]["cross-cloud"][:api_token],
-              provision_ref: @config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]
+              provision_ref: @config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref],
             }
 
+            # TODO: check for arch support on the provider?
+            arch_types = ["amd64", "arm64"]
 
-            self.provision_cloud(cloud_name, options)
+            arch_types.each do |machine_arch|
+              options[:arch] = machine_arch
+              self.provision_cloud(cloud_name, options)
+            end
+
             #self.provision_cloud(cloud_name, {:kubernetes_build_id => 5413, :kubernetes_ref => "v1.8.1", :dashboard_api_host_port => "devapi.cncf.ci", :cross_cloud_yml => @config[:cross_cloud_yml], :api_token => @config[:gitlab][:pipeline]["cross-cloud"][:api_token], :provision_ref => @config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]})
           end
         end
