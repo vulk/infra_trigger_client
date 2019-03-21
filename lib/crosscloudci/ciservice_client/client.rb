@@ -437,7 +437,6 @@ module CrossCloudCI
         cross_cloud_id = project_id_by_name("cross-cloud")
         cross_cloud_api_token = @config[:gitlab][:pipeline]["cross-cloud"][:api_token]
 
-
         deployment_env = @provisionings.select {|p| p[:pipeline_id] == target_provision_id}.first
 
         if deployment_env.nil?
@@ -446,13 +445,11 @@ module CrossCloudCI
 
         kubernetes_release_type = "stable"
 
-        deployment_env[:target_project_ref].each do |ref|
-          case ref
-          when "master"
-            kubernetes_release_type = "head"
-          else
-            kubernetes_release_type = "stable"
-          end
+        case deployment_env[:target_project_ref]
+        when "master"
+          kubernetes_release_type = "head"
+        else
+          kubernetes_release_type = "stable"
         end
 
         trigger_variables[:KUBERNETES_RELEASE_TYPE] = kubernetes_release_type
