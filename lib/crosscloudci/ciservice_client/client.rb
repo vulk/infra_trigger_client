@@ -47,6 +47,8 @@ module CrossCloudCI
           api_token = @config[:gitlab][:pipeline][project_name][:api_token]
         end
 
+
+
         trigger_variables = {}
 
         @logger.info "[Build] #{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}, #{options}"
@@ -54,8 +56,15 @@ module CrossCloudCI
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
 
+
         # TODO: add global default
         trigger_variables[:ARCH] = options[:arch] ||= "amd64"
+
+        @logger.info "options[:arch] #{options[:arch]}"
+
+        @logger.info "trigger_variables[:ARCH] #{trigger_variables[:ARCH]}"
+
+        arch = trigger_variables[:ARCH]
 
         # TODO: Lookup arch support for each project.  
         # NOTE: Only supporting k8s for arm 
@@ -84,7 +93,7 @@ module CrossCloudCI
         end
 
         gitlab_pipeline_id = gitlab_result.id
-        data = {  project_name: project_name, ref: ref, project_id: project_id, pipeline_id: gitlab_pipeline_id }
+        data = {  project_name: project_name, ref: ref, project_id: project_id, pipeline_id: gitlab_pipeline_id, arch: arch}
         if @config[:projects][project_name]["app_layer"]
           @builds[:app_layer] << data
         else
@@ -358,60 +367,73 @@ module CrossCloudCI
         # TODO: refactor to support multiple k8s environments (eg. RC, HEAD, arm)
         @logger.info "@builds: #{@builds}"
         @logger.info "@builds[:provision_layer]: #{@builds[:provision_layer]}"
-        if @builds[:provision_layer].count > 1
-          latest_k8s_builds = @builds[:provision_layer].sort! {|x,y| x[:pipeline_id] <=> y[:pipeline_id]}.slice(-2,2)
-        else
-          latest_k8s_builds = @builds[:provision_layer]
-        end
+        latest_k8s_builds = @builds[:provision_layer].sort! {|x,y| x[:pipeline_id] <=> y[:pipeline_id]}
+        # if @builds[:provision_layer].count > 1
+        #   latest_k8s_builds = @builds[:provision_layer].sort! {|x,y| x[:pipeline_id] <=> y[:pipeline_id]}.slice(-2,2)
+        # else
+        #   latest_k8s_builds = @builds[:provision_layer]
+        # end
 
         # NOTE: disabling HEAD for https://github.com/crosscloudci/crosscloudci/issues/124
         # TODO: refactor to support multiple k8s environments (eg. RC, HEAD, arm)
         @logger.info "latest_k8s_builds: #{latest_k8s_builds}"
-        kubernetes_head = latest_k8s_builds.select {|b| b[:ref] == "master" }.first
-        kubernetes_stable = latest_k8s_builds.select {|b| b[:ref] != "master" }.first
+        # kubernetes_head = latest_k8s_builds.select {|b| b[:ref] == "master" }.first
+        # kubernetes_stable = latest_k8s_builds.select {|b| b[:ref] != "master" }.first
+        kubernetes_head = latest_k8s_builds.select {|b| b[:ref] == "master" }
+        kubernetes_stable = latest_k8s_builds.select {|b| b[:ref] != "master" }
 
         @active_clouds.each do |cloud|
           cloud_name = cloud[0]
           @logger.info "Active cloud: #{cloud_name}"
 
           # TODO: refactor to support multiple k8s environments (eg. RC, HEAD, arm)
-          [:stable, :head].each do |release|
-            kubernetes_build = ""
-            case release
-            when :stable
-              kubernetes_build = kubernetes_stable
-            # NOTE: wait time not needed while only using stable. refactor for multiple envs
-            else
-              # if cloud_name == "packet"
-              #   @logger.info "Waiting 600 seconds for next Packet API call"
-              #   sleep 600
-              # end
-              kubernetes_build = kubernetes_head
-            end
+          # [:stable, :head].each do |release|
+          #   if release == :stable
+          #     builds = kubernetes_stable 
+          #   else
+          #     builds = kubernetes_head 
+          #   end
+          #   @logger.info "builds: #{builds}"
 
-            if kubernetes_build
-              @logger.info "kubernetes_build: #{kubernetes_build}"
-              build_id = kubernetes_build[:pipeline_id] 
-              ref = kubernetes_build[:ref]
 
-              options = {}
-              options = {
-                dashboard_api_host_port: @config[:dashboard][:dashboard_api_host_port],
-                cross_cloud_yml: @config[:cross_cloud_yml], 
-                kubernetes_build_id: build_id,
-                kubernetes_ref: ref,
-                api_token: @config[:gitlab][:pipeline]["cross-cloud"][:api_token],
-                provision_ref: @config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref],
-              }
+          latest_k8s_builds.each do |kubernetes_build|
 
-              # TODO: check for arch support on the provider?
-              arch_types = ["amd64", "arm64"]
+            # kubernetes_build = ""
+            # case release
+            # when :stable
+            #   kubernetes_build = kubernetes_stable
+            # # NOTE: wait time not needed while only using stable. refactor for multiple envs
+            # else
+            #   # if cloud_name == "packet"
+            #   #   @logger.info "Waiting 600 seconds for next Packet API call"
+            #   #   sleep 600
+            #   # end
+            #   kubernetes_build = kubernetes_head
+            # end
 
-              arch_types.each do |machine_arch|
-                options[:arch] = machine_arch
-                self.provision_cloud(cloud_name, options)
-              end
-            end
+            @logger.info "kubernetes_build: #{kubernetes_build}"
+            build_id = kubernetes_build[:pipeline_id] 
+            ref = kubernetes_build[:ref]
+
+            options = {}
+            options = {
+              dashboard_api_host_port: @config[:dashboard][:dashboard_api_host_port],
+              cross_cloud_yml: @config[:cross_cloud_yml], 
+              kubernetes_build_id: build_id,
+              kubernetes_ref: ref,
+              api_token: @config[:gitlab][:pipeline]["cross-cloud"][:api_token],
+              provision_ref: @config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref],
+            }
+
+            # TODO: check for arch support on the provider?
+            # arch_types = ["amd64", "arm64"]
+            #
+            # arch_types.each do |machine_arch|
+              # options[:arch] = machine_arch
+              options[:arch] = kubernetes_build[:arch]
+              self.provision_cloud(cloud_name, options)
+            # end
+            # end
 
             #self.provision_cloud(cloud_name, {:kubernetes_build_id => 5413, :kubernetes_ref => "v1.8.1", :dashboard_api_host_port => "devapi.cncf.ci", :cross_cloud_yml => @config[:cross_cloud_yml], :api_token => @config[:gitlab][:pipeline]["cross-cloud"][:api_token], :provision_ref => @config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]})
           end
