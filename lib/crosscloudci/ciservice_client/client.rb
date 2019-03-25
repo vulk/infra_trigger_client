@@ -58,18 +58,18 @@ module CrossCloudCI
 
 
         # TODO: add global default
-        trigger_variables[:ARCH] = options[:arch] ||= "amd64"
+        arch = options[:arch] || "amd64"
+        trigger_variables[:ARCH] = arch
 
         @logger.info "options[:arch] #{options[:arch]}"
 
         @logger.info "trigger_variables[:ARCH] #{trigger_variables[:ARCH]}"
 
-        arch = trigger_variables[:ARCH]
 
         # TODO: Lookup arch support for each project.  
         # NOTE: Only supporting k8s for arm 
-        if project_name != "kubernetes" and options[:arch] != "amd64"
-            @logger.info "[Build] No #{options[:arch]} support for #{project_name}"
+        if project_name != "kubernetes" and arch != "amd64"
+            @logger.info "[Build] No #{arch} support for #{project_name}"
             return
         end
 
