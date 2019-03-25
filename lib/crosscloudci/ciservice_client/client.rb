@@ -17,6 +17,7 @@ module CrossCloudCI
       attr_accessor :projects, :active_projects,  :all_gitlab_projects, :active_gitlab_projects, :active_clouds
       attr_accessor :builds, :builds2, :app_deploys, :provisionings
 
+
       #def initialize(options = {})
       def initialize(config)
         @config = config
@@ -46,12 +47,31 @@ module CrossCloudCI
           api_token = @config[:gitlab][:pipeline][project_name][:api_token]
         end
 
+
+
         trigger_variables = {}
 
         @logger.info "[Build] #{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}, #{options}"
 
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
+
+
+        # TODO: add global default
+        arch = options[:arch] || "amd64"
+        trigger_variables[:ARCH] = arch
+
+        @logger.info "options[:arch] #{options[:arch]}"
+
+        @logger.info "trigger_variables[:ARCH] #{trigger_variables[:ARCH]}"
+
+
+        # TODO: Lookup arch support for each project.  
+        # NOTE: Only supporting k8s for arm 
+        if project_name != "kubernetes" and arch != "amd64"
+            @logger.info "[Build] No #{arch} support for #{project_name}"
+            return
+        end
 
         gitlab_result = nil
         tries=3
@@ -73,7 +93,7 @@ module CrossCloudCI
         end
 
         gitlab_pipeline_id = gitlab_result.id
-        data = {  project_name: project_name, ref: ref, project_id: project_id, pipeline_id: gitlab_pipeline_id }
+        data = {  project_name: project_name, ref: ref, project_id: project_id, pipeline_id: gitlab_pipeline_id, arch: arch}
         if @config[:projects][project_name]["app_layer"]
           @builds[:app_layer] << data
         else
@@ -120,14 +140,11 @@ module CrossCloudCI
         load_project_data
         @active_projects.each do |proj|
           name = proj[0]
-          #next unless name == "linkerd"
 
           puts "Active project: #{name}"
-          #next if name == "kubernetes"
-          #next if name == "prometheus"
 
           @logger.debug "setting trigger variables"
-          trigger_variables = {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]}
+          options = {:dashboard_api_host_port => @config[:dashboard][:dashboard_api_host_port], :cross_cloud_yml => @config[:cross_cloud_yml]}
 
           @logger.debug "setting project id"
           project_id =  all_gitlab_projects.select {|agp| agp["name"].downcase == name}.first["id"]
@@ -135,9 +152,17 @@ module CrossCloudCI
           ["stable_ref", "head_ref"].each do |release_key_name|
             #next if name == "kubernetes" and release_key_name == "head_ref"
             ref = @config[:projects][name][release_key_name]
-            puts "Calling build_project(#{project_id}, #{ref}, #{trigger_variables})"
-            #self.build_project(project_id, api_token, ref, trigger_variables)
-            self.build_project(project_id, ref, trigger_variables)
+
+            # TODO: check for arch support on the provider?
+            arch_types = ["amd64", "arm64"]
+
+            arch_types.each do |machine_arch|
+              options[:arch] = machine_arch
+
+              puts "Calling build_project(#{project_id}, #{ref}, #{options})"
+              #self.build_project(project_id, api_token, ref, options)
+              self.build_project(project_id, ref, options)
+            end
           end
         end
       end
@@ -197,6 +222,9 @@ module CrossCloudCI
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         #trigger_variables[:CROSS_CLOUD_YML] = options[:cross_cloud_yml] unless options[:cross_cloud_yml].nil?
         trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
+
+        # TODO: add global default arch eg. @default_arch = "amd64"
+        trigger_variables[:ARCH] = options[:arch] ||= "amd64"
 
         gitlab_result = nil
         tries=3
@@ -329,41 +357,61 @@ module CrossCloudCI
 
         # TODO: Support loading builds from GitLab
         # TODO: Check for empty provisioning layer and project layer
-        if @builds.nil? or @builds.empty?
+        # if @builds.nil? or @builds.empty?
+        if @builds[:provision_layer].nil? or 
+            @builds[:provision_layer].empty?
           @logger.error "Builds needed before provisioning"
           return
         end
 
         # TODO: refactor to support multiple k8s environments (eg. RC, HEAD, arm)
-        if @builds[:provision_layer].count > 1
-          latest_k8s_builds = @builds[:provision_layer].sort! {|x,y| x[:pipeline_id] <=> y[:pipeline_id]}.slice(-2,2)
-        else
-          latest_k8s_builds = @builds[:provision_layer]
-        end
+        @logger.info "@builds: #{@builds}"
+        @logger.info "@builds[:provision_layer]: #{@builds[:provision_layer]}"
+        latest_k8s_builds = @builds[:provision_layer].sort! {|x,y| x[:pipeline_id] <=> y[:pipeline_id]}
+        # if @builds[:provision_layer].count > 1
+        #   latest_k8s_builds = @builds[:provision_layer].sort! {|x,y| x[:pipeline_id] <=> y[:pipeline_id]}.slice(-2,2)
+        # else
+        #   latest_k8s_builds = @builds[:provision_layer]
+        # end
 
         # NOTE: disabling HEAD for https://github.com/crosscloudci/crosscloudci/issues/124
         # TODO: refactor to support multiple k8s environments (eg. RC, HEAD, arm)
-        kubernetes_head = latest_k8s_builds.select {|b| b[:ref] == "master" }.first
-        kubernetes_stable = latest_k8s_builds.select {|b| b[:ref] != "master" }.first
+        @logger.info "latest_k8s_builds: #{latest_k8s_builds}"
+        # kubernetes_head = latest_k8s_builds.select {|b| b[:ref] == "master" }.first
+        # kubernetes_stable = latest_k8s_builds.select {|b| b[:ref] != "master" }.first
+        kubernetes_head = latest_k8s_builds.select {|b| b[:ref] == "master" }
+        kubernetes_stable = latest_k8s_builds.select {|b| b[:ref] != "master" }
 
         @active_clouds.each do |cloud|
           cloud_name = cloud[0]
           @logger.info "Active cloud: #{cloud_name}"
 
           # TODO: refactor to support multiple k8s environments (eg. RC, HEAD, arm)
-          [:stable, :head].each do |release|
-            case release
-            when :stable
-              kubernetes_build = kubernetes_stable
-            # NOTE: wait time not needed while only using stable. refactor for multiple envs
-            else
-              # if cloud_name == "packet"
-              #   @logger.info "Waiting 600 seconds for next Packet API call"
-              #   sleep 600
-              # end
-              kubernetes_build = kubernetes_head
-            end
+          # [:stable, :head].each do |release|
+          #   if release == :stable
+          #     builds = kubernetes_stable 
+          #   else
+          #     builds = kubernetes_head 
+          #   end
+          #   @logger.info "builds: #{builds}"
 
+
+          latest_k8s_builds.each do |kubernetes_build|
+
+            # kubernetes_build = ""
+            # case release
+            # when :stable
+            #   kubernetes_build = kubernetes_stable
+            # # NOTE: wait time not needed while only using stable. refactor for multiple envs
+            # else
+            #   # if cloud_name == "packet"
+            #   #   @logger.info "Waiting 600 seconds for next Packet API call"
+            #   #   sleep 600
+            #   # end
+            #   kubernetes_build = kubernetes_head
+            # end
+
+            @logger.info "kubernetes_build: #{kubernetes_build}"
             build_id = kubernetes_build[:pipeline_id] 
             ref = kubernetes_build[:ref]
 
@@ -374,11 +422,19 @@ module CrossCloudCI
               kubernetes_build_id: build_id,
               kubernetes_ref: ref,
               api_token: @config[:gitlab][:pipeline]["cross-cloud"][:api_token],
-              provision_ref: @config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]
+              provision_ref: @config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref],
             }
 
+            # TODO: check for arch support on the provider?
+            # arch_types = ["amd64", "arm64"]
+            #
+            # arch_types.each do |machine_arch|
+              # options[:arch] = machine_arch
+              options[:arch] = kubernetes_build[:arch]
+              self.provision_cloud(cloud_name, options)
+            # end
+            # end
 
-            self.provision_cloud(cloud_name, options)
             #self.provision_cloud(cloud_name, {:kubernetes_build_id => 5413, :kubernetes_ref => "v1.8.1", :dashboard_api_host_port => "devapi.cncf.ci", :cross_cloud_yml => @config[:cross_cloud_yml], :api_token => @config[:gitlab][:pipeline]["cross-cloud"][:api_token], :provision_ref => @config[:gitlab][:pipeline]["cross-cloud"][:cross_cloud_ref]})
           end
         end
@@ -435,6 +491,29 @@ module CrossCloudCI
         # TODO: pull cloud from provisioning
         cross_cloud_id = project_id_by_name("cross-cloud")
         cross_cloud_api_token = @config[:gitlab][:pipeline]["cross-cloud"][:api_token]
+
+        deployment_env = @provisionings.select {|p| p[:pipeline_id] == target_provision_id}.first
+
+        if deployment_env.nil?
+          raise CrossCloudCi::CiServiceError.new("Kubernetes provisioning could not be found for Gitlab pipeline id #{pipeline_id}")
+        end
+
+        kubernetes_release_type = "stable"
+
+        case deployment_env[:target_project_ref]
+        when "master"
+          kubernetes_release_type = "head"
+        else
+          kubernetes_release_type = "stable"
+        end
+
+        trigger_variables[:KUBERNETES_RELEASE_TYPE] = kubernetes_release_type
+        trigger_variables[:PROVISION_PIPELINE_ID] = target_provision_id # cross-cloud k8s provisioning
+
+        # How to determine test env for the selector
+        # 1. release type => stable / head
+        # 2. target provision id = cross-cloud pipeline id
+        #    * kubernetes ref (commit or version) can be derived
 
 
         # Retrieve Kubeconfig for the target cloud which was previously provisioned
@@ -656,12 +735,18 @@ module CrossCloudCI
               deployment_env = []
               ["stable_ref", "head_ref"].each do |k8s_release_ref|
                 deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }.first
+                if deployment_env 
 
                 @logger.info "[App Deploy] Deploying to #{cloud_name} running Kubernetes #{deployment_env[:target_project_ref]} provisioned in pipeline #{deployment_env[:pipeline_id]}"
 
                 @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{deployment_env[:pipeline_id]}, #{cloud_name}, #{options})"
 
                 self.app_deploy(project_id, project_build_id, deployment_env[:pipeline_id], cloud_name, options)
+                else
+                  @logger.error "malformed @provisionings: #{@provisionings}"
+                  @logger.error "@config[:projects]['kubernetes'][k8s_release_ref]: #{@config[:projects]['kubernetes'][k8s_release_ref]}"
+
+                end
               end
             end
           end
