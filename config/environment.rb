@@ -40,8 +40,8 @@ module CrossCloudCi
         # gitlab_base_url="https://dev.vulk.co:4002/api"
         # cross_cloud_yml="https://raw.githubusercontent.com/crosscloudci/cncf-configuration/project-details-36/cross-cloud.yml"
         cross_cloud_yml="https://raw.githubusercontent.com/crosscloudci/cncf-configuration/master/cross-cloud.yml"
-        cross_cloud_ref="master"
-        cross_project_ref="master"
+        cross_cloud_ref="integration"
+        cross_project_ref="integration"
         dashboard_api_host_port="devapi.cncf.ci"
       end
 
