@@ -178,8 +178,7 @@ module CrossCloudCI
             ref = @config[:projects][name][release_key_name]
 
             # TODO: check for arch support on the provider?
-            #arch_types = ["amd64", "arm64"]
-            arch_types = ["amd64"]
+            arch_types = ["amd64", "arm64"]
 
             arch_types.each do |machine_arch|
               options[:arch] = machine_arch
