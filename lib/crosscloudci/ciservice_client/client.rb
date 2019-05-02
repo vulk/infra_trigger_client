@@ -139,6 +139,18 @@ module CrossCloudCI
           status ||= job.first["status"]
         end
 
+        job = jobs.select {|j| j["name"] == "baseimage-aufs"}
+        unless job.empty? || job.first["status"] == "created"
+          # compile is higher precendent than compile-aufs or compile-overlayfs
+          status ||= job.first["status"]
+        end
+
+        job = jobs.select {|j| j["name"] == "baseimage-overlayfs"}
+        unless job.empty? || job.first["status"] == "created"
+          # compile is higher precendent than compile-aufs or compile-overlayfs
+          status ||= job.first["status"]
+        end
+
         job = jobs.select {|j| j["name"] == "container"}
         unless job.empty? || job.first["status"] == "created"
           status = job.first["status"]
