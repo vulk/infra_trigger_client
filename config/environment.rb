@@ -1,4 +1,5 @@
 require 'yaml/store'
+require 'faraday'
 
 module CrossCloudCi
   module Common
