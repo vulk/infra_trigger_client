@@ -47,8 +47,6 @@ module CrossCloudCI
           api_token = @config[:gitlab][:pipeline][project_name][:api_token]
         end
 
-
-
         trigger_variables = {}
 
         @logger.info "[Build] #{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}, #{options}"
@@ -56,12 +54,6 @@ module CrossCloudCI
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
 
-
-        # TODO: add global default
-        # archs = @config[project_name][:arch]
-        # if archs.nil? 
-        #   archs = ["amd64"]
-        # end
         arch = options[:arch] || "amd64"
         trigger_variables[:ARCH] = arch
 
