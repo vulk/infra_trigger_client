@@ -58,6 +58,10 @@ module CrossCloudCI
 
 
         # TODO: add global default
+        # archs = @config[project_name][:arch]
+        # if archs.nil? 
+        #   archs = ["amd64"]
+        # end
         arch = options[:arch] || "amd64"
         trigger_variables[:ARCH] = arch
 
@@ -67,11 +71,11 @@ module CrossCloudCI
 
 
         # TODO: Lookup arch support for each project.  
-        # NOTE: Only supporting k8s for arm 
-        if project_name != "kubernetes" and arch != "amd64"
-            @logger.info "[Build] No #{arch} support for #{project_name}"
-            return
-        end
+        # # NOTE: Only supporting k8s for arm 
+        # if project_name != "kubernetes" and arch != "amd64"
+        #     @logger.info "[Build] No #{arch} support for #{project_name}"
+        #     return
+        # end
 
         gitlab_result = nil
         tries=3
@@ -189,8 +193,16 @@ module CrossCloudCI
             #next if name == "kubernetes" and release_key_name == "head_ref"
             ref = @config[:projects][name][release_key_name]
 
+            project_name = project_name_by_id(project_id)
+            # @logger.debug "project name #{project_name}"
             # TODO: check for arch support on the provider?
-            arch_types = ["amd64", "arm64"]
+            arch_types = @config[:projects][project_name]["arch"]
+            # @logger.debug "config projects #{@config[:projects]}"
+            if arch_types.nil? 
+              arch_types = ["amd64"]
+            end
+            @logger.debug "arch types for #{project_name} #{arch_types}"
+            # arch_types = ["amd64", "arm64"]
 
             arch_types.each do |machine_arch|
               options[:arch] = machine_arch
@@ -769,6 +781,7 @@ module CrossCloudCI
               # TODO: Refactor to support multiple test environments
 
               deployment_env = []
+              #TODO match arm/amd provisionings with arm@amd project build pipeline ids
               ["stable_ref", "head_ref"].each do |k8s_release_ref|
                 deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }.first
                 if deployment_env 
