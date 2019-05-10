@@ -154,6 +154,42 @@ RSpec.describe CrossCloudCI::CiService do
      deploy_data = client.app_deploy_to_active_clouds
      expect(deploy_data).to eq true 
    end
+   it "should only accept arm provisions if arch includes arm" do
+     #######
+     # builds
+     # ####
+     config = CrossCloudCi::Common.init_config
+     client = CrossCloudCI::CiService::Client.new(config)
+     gitlab_proxy = double()
+     client.gitlab_proxy = gitlab_proxy
+     allow(gitlab_proxy).to receive(:trigger_pipeline) do 
+       a = Object.new 
+       class << a  
+         attr_accessor :id  
+       end  
+       a.id = 1
+       a
+     end
+     expect(gitlab_proxy).to receive(:trigger_pipeline)
+     data = client.build_active_projects
+     expect(data["kubernetes"]["arch"]).to eq ["amd64", "arm64"]
+     ######
+     # provisions
+     ###### 
+     provision_data = client.provision_active_clouds
+     expect(provision_data[0][1]["active"]).to eq true 
+     allow(gitlab_proxy).to receive(:get_pipeline_jobs).with(any_args) do 
+       a = {"id" =>  1,
+            "name" => "Provisioning"}
+       [a]
+     end
+     ######
+     # deploys
+     ###### 
+     deploy_data = client.app_deploy_to_active_clouds
+     app_deploys = client.app_deploys.find {|p| p[:project_name] == "prometheus" && p[:arch] == "arm64"}
+     expect(app_deploys).to eq nil 
+   end
  end
  context "app_deploy" do
    it "should accept arm provisions" do

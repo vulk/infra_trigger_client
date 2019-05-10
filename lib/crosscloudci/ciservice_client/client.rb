@@ -786,7 +786,7 @@ module CrossCloudCI
                   options[:arch] = env[:arch] 
                   @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{env[:pipeline_id]}, #{cloud_name}, #{options})"
                   # Dont deploy apps that dont have matching archs
-                  if config[:projects]["kubernetes"]["arch"].find {|x| x == env[:arch]} 
+                  if config[:projects][project_name]["arch"].find {|x| x == env[:arch]} 
                     options[:arch] = env[:arch] 
 
                     self.app_deploy(project_id, project_build_id, env[:pipeline_id], cloud_name, options)
