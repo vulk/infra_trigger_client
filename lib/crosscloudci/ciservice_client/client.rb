@@ -784,10 +784,10 @@ module CrossCloudCI
 
                 @logger.info "[App Deploy] Deploying to #{cloud_name} running Kubernetes #{env[:target_project_ref]} provisioned in pipeline #{env[:pipeline_id]} arch: #{env[:arch]}"
 
-                @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{deployment_env[:pipeline_id]}, #{cloud_name}, #{options})"
+                @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{env[:pipeline_id]}, #{cloud_name}, #{options})"
                 options[:arch] = env[:arch] 
 
-                self.app_deploy(project_id, project_build_id, deployment_env[:pipeline_id], cloud_name, options)
+                self.app_deploy(project_id, project_build_id, env[:pipeline_id], cloud_name, options)
                 end
                 if deployment_env.empty?
                   @logger.error "malformed @provisionings: #{@provisionings}"

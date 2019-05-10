@@ -52,7 +52,7 @@ RSpec.describe CrossCloudCI::CiService do
    end
  end
  context "provision_active_clouds" do
-   it "should have a valid arm response" do
+   it "should accept arm builds" do
      #######
      # builds
      # ####
@@ -74,8 +74,44 @@ RSpec.describe CrossCloudCI::CiService do
      #######
      
      provision_data = client.provision_active_clouds
-     puts provision_data
      expect(provision_data[0][1]["active"]).to eq true 
+   end
+ end
+ context "app_deploy_to_active_clouds" do
+   it "should accept arm provisions" do
+     #######
+     # builds
+     # ####
+     config = CrossCloudCi::Common.init_config
+     client = CrossCloudCI::CiService::Client.new(config)
+     gitlab_proxy = double()
+     client.gitlab_proxy = gitlab_proxy
+     allow(gitlab_proxy).to receive(:trigger_pipeline) do 
+       a = Object.new 
+       class << a  
+         attr_accessor :id  
+       end  
+       a.id = 1
+       a
+     end
+     expect(gitlab_proxy).to receive(:trigger_pipeline)
+     data = client.build_active_projects
+     expect(data["kubernetes"]["arch"]).to eq ["amd64", "arm64"]
+     ######
+     # provisions
+     ###### 
+     provision_data = client.provision_active_clouds
+     expect(provision_data[0][1]["active"]).to eq true 
+     allow(gitlab_proxy).to receive(:get_pipeline_jobs).with(any_args) do 
+       a = {"id" =>  1,
+            "name" => "Provisioning"}
+       [a]
+     end
+     ######
+     # deploys
+     ###### 
+     deploy_data = client.app_deploy_to_active_clouds
+     expect(deploy_data).to eq true 
    end
  end
 end 
