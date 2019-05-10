@@ -622,7 +622,8 @@ module CrossCloudCI
           trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
         end
 
-        trigger_variables[:ARCH] = options[:arch]
+        arch = options[:arch] || "amd64"
+        trigger_variables[:ARCH] = arch
 
         gitlab_result = nil
         tries=3
@@ -646,7 +647,7 @@ module CrossCloudCI
         gitlab_pipeline_id = gitlab_result.id
         # TODO make this like provisioning - remove pipline_id from start
         # NOTE: trigger_ref is the cross-project branch to use!
-        data = { project_name: target_project_name, target_project_ref: target_project_ref, ref: trigger_ref, project_id: target_project_id, pipeline_id: gitlab_pipeline_id, cloud: target_cloud} 
+        data = { project_name: target_project_name, target_project_ref: target_project_ref, ref: trigger_ref, project_id: target_project_id, pipeline_id: gitlab_pipeline_id, cloud: target_cloud, arch: arch} 
         @app_deploys << data
         data
       end
@@ -777,8 +778,6 @@ module CrossCloudCI
               deployment_env = []
               #TODO match arm/amd provisionings with arm@amd project build pipeline ids
               ["stable_ref", "head_ref"].each do |k8s_release_ref|
-                #TODO loop through archs
-                # deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }.first
                 deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }
                 deployment_env.each do |env|
                   @logger.info "[App Deploy] Deploying env: #{env}"
