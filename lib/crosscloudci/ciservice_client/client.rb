@@ -49,7 +49,7 @@ module CrossCloudCI
 
         trigger_variables = {}
 
-        @logger.info "[Build] #{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}, #{options}"
+        # @logger.info "[Build] #{project_name} project id: #{project_id}, api token: #{api_token}, ref:#{ref}, #{options}"
 
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
@@ -57,9 +57,9 @@ module CrossCloudCI
         arch = options[:arch] || "amd64"
         trigger_variables[:ARCH] = arch
 
-        @logger.info "options[:arch] #{options[:arch]}"
-
-        @logger.info "trigger_variables[:ARCH] #{trigger_variables[:ARCH]}"
+        # @logger.info "options[:arch] #{options[:arch]}"
+        #
+        # @logger.info "trigger_variables[:ARCH] #{trigger_variables[:ARCH]}"
 
 
         # TODO: Lookup arch support for each project.  
@@ -622,6 +622,8 @@ module CrossCloudCI
           trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
         end
 
+        trigger_variables[:ARCH] = options[:arch]
+
         gitlab_result = nil
         tries=3
         begin
@@ -775,15 +777,19 @@ module CrossCloudCI
               deployment_env = []
               #TODO match arm/amd provisionings with arm@amd project build pipeline ids
               ["stable_ref", "head_ref"].each do |k8s_release_ref|
-                deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }.first
-                if deployment_env 
+                #TODO loop through archs
+                # deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }.first
+                deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }
+                deployment_env.each do |env|
 
-                @logger.info "[App Deploy] Deploying to #{cloud_name} running Kubernetes #{deployment_env[:target_project_ref]} provisioned in pipeline #{deployment_env[:pipeline_id]}"
+                @logger.info "[App Deploy] Deploying to #{cloud_name} running Kubernetes #{env[:target_project_ref]} provisioned in pipeline #{env[:pipeline_id]} arch: #{env[:arch]}"
 
                 @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{deployment_env[:pipeline_id]}, #{cloud_name}, #{options})"
+                options[:arch] = env[:arch] 
 
                 self.app_deploy(project_id, project_build_id, deployment_env[:pipeline_id], cloud_name, options)
-                else
+                end
+                if deployment_env.empty?
                   @logger.error "malformed @provisionings: #{@provisionings}"
                   @logger.error "@config[:projects]['kubernetes'][k8s_release_ref]: #{@config[:projects]['kubernetes'][k8s_release_ref]}"
 
