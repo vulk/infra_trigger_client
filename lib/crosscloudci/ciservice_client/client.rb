@@ -263,8 +263,8 @@ module CrossCloudCI
         #trigger_variables[:CROSS_CLOUD_YML] = options[:cross_cloud_yml] unless options[:cross_cloud_yml].nil?
         trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
 
-        # TODO: add global default arch eg. @default_arch = "amd64"
-        trigger_variables[:ARCH] = options[:arch] ||= "amd64"
+        arch = options[:arch] || "amd64"
+        trigger_variables[:ARCH] = arch
 
         gitlab_result = nil
         tries=3
@@ -286,7 +286,7 @@ module CrossCloudCI
         end
 
         gitlab_pipeline_id = gitlab_result.id
-        data = { project_name: target_project_name, target_project_ref: target_project_ref, trigger_ref: trigger_ref, target_project_id: target_project_id, project_id: project_id, pipeline_id: gitlab_pipeline_id, cloud: cloud }
+        data = { project_name: target_project_name, target_project_ref: target_project_ref, trigger_ref: trigger_ref, target_project_id: target_project_id, project_id: project_id, pipeline_id: gitlab_pipeline_id, cloud: cloud, arch: arch }
         @provisionings << data
         data
       end
@@ -781,13 +781,17 @@ module CrossCloudCI
                 # deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }.first
                 deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }
                 deployment_env.each do |env|
+                  @logger.info "[App Deploy] Deploying env: #{env}"
+                  @logger.info "[App Deploy] Deploying to #{cloud_name} running Kubernetes #{env[:target_project_ref]} provisioned in pipeline #{env[:pipeline_id]} arch: #{env[:arch]}"
 
-                @logger.info "[App Deploy] Deploying to #{cloud_name} running Kubernetes #{env[:target_project_ref]} provisioned in pipeline #{env[:pipeline_id]} arch: #{env[:arch]}"
+                  options[:arch] = env[:arch] 
+                  @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{env[:pipeline_id]}, #{cloud_name}, #{options})"
+                  # Dont deploy apps that dont have matching archs
+                  if config[:projects]["kubernetes"]["arch"].find {|x| x == env[:arch]} 
+                    options[:arch] = env[:arch] 
 
-                @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{env[:pipeline_id]}, #{cloud_name}, #{options})"
-                options[:arch] = env[:arch] 
-
-                self.app_deploy(project_id, project_build_id, env[:pipeline_id], cloud_name, options)
+                    self.app_deploy(project_id, project_build_id, env[:pipeline_id], cloud_name, options)
+                  end
                 end
                 if deployment_env.empty?
                   @logger.error "malformed @provisionings: #{@provisionings}"
