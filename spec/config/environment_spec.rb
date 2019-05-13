@@ -10,5 +10,10 @@ RSpec.describe CrossCloudCi::Common do
       config = CrossCloudCi::Common.init_config
       expect(config[:projects]["kubernetes"]["arch"]).to eq ["amd64", "arm64"] 
    end
+
+   it "should overwrite cross_cloud.yml with cncnfci.yml" do
+      config = CrossCloudCi::Common.init_config
+      expect(config[:projects]["coredns"]["arch"]).to eq ["amd64", "arm64"] 
+   end
  end
 end 

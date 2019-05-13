@@ -13,6 +13,7 @@ module CrossCloudCI
     class Client
       attr_accessor :logger
       attr_accessor :config
+      attr_accessor :config_repo
       attr_accessor :gitlab_proxy
       attr_accessor :projects, :active_projects,  :all_gitlab_projects, :active_gitlab_projects, :active_clouds
       attr_accessor :builds, :builds2, :app_deploys, :provisionings
@@ -786,7 +787,7 @@ module CrossCloudCI
                   options[:arch] = env[:arch] 
                   @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{env[:pipeline_id]}, #{cloud_name}, #{options})"
                   # Dont deploy apps that dont have matching archs
-                  if config[:projects][project_name]["arch"].find {|x| x == env[:arch]} 
+                  if config[:projects][project_name]["arch"] && config[:projects][project_name]["arch"].find {|x| x == env[:arch]} 
                     options[:arch] = env[:arch] 
 
                     self.app_deploy(project_id, project_build_id, env[:pipeline_id], cloud_name, options)
