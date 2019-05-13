@@ -13,6 +13,7 @@ module CrossCloudCI
     class Client
       attr_accessor :logger
       attr_accessor :config
+      attr_accessor :config_repo
       attr_accessor :gitlab_proxy
       attr_accessor :projects, :active_projects,  :all_gitlab_projects, :active_gitlab_projects, :active_clouds
       attr_accessor :builds, :builds2, :app_deploys, :provisionings

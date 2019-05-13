@@ -113,8 +113,30 @@ module CrossCloudCi
         #return nil
       end
 
+      #TODO loop through all projects
+      # Get all config_repos
+      # YAML.parse all config repos
+      # add all config repos on to the projects hash
+      
       @config[:projects] = cross_cloud_config["projects"]
+      # config_repo_response = Faraday.get @config[:projects]["coredns"]["configuration_repo"]
+      # config_repo_resp = YAML.parse(config_repo_response.body).to_ruby
 
+      # kubernetes does not have configuration_repo so I'm removing from loop
+      valid_cross_cloud_config_projects  = @config[:projects].select { |key, proj| !proj["configuration_repo"].nil? }
+      valid_cross_cloud_config_projects.each do |key, proj|
+        #grabbing the cncf yaml for respective project
+        cncf_config_yaml = Faraday.get proj["configuration_repo"] if !proj["configuration_repo"].nil?
+        #format response for retrieved cncf yaml
+        formatted_cncf_config_yaml = YAML.parse(cncf_config_yaml.body).to_ruby
+        #merged hashes of respective cncf yaml and cross_cloud proj -deference given to cross_cloud proj values
+        updated_cncf_config = formatted_cncf_config_yaml["project"].merge(proj) if formatted_cncf_config_yaml["project"]["display_name"].downcase == proj["gitlab_name"]
+        #retrieved cross_cloud project from @config bc this is the hash acutally being used for init_config
+        cross_cloud_proj = @config[:projects].fetch(proj["gitlab_name"])
+        #merged updated values to prod hash with merge! bc this modifies instead of returning new
+        cross_cloud_proj.merge!(updated_cncf_config || {})
+      end 
+        
       # Helm configuration
       @config[:projects]["linkerd"][:helm] = {
         :label_master => "app=linkerd-master-linkerd",
