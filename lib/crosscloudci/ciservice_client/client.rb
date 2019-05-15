@@ -758,14 +758,6 @@ module CrossCloudCI
 
           #["stable_ref", "head_ref"].each do |release_key_name|
           release_ref_keys.each do |release_key_name|
-            project_ref = @config[:projects][project_name][release_key_name]
-
-            project_build = @builds[:app_layer].select {|p| p[:project_name] == project_name && p[:ref] == project_ref }.first
-            if project_build
-              project_build_id = project_build[:pipeline_id]
-            end
-
-            puts "[App Deploy] #{project_name} (#{project_id}) #{project_ref} #{trigger_variables}"
 
             @active_clouds.each do |cloud|
               cloud_name = cloud[0]
@@ -779,15 +771,29 @@ module CrossCloudCI
               deployment_env = []
               #TODO match arm/amd provisionings with arm@amd project build pipeline ids
               ["stable_ref", "head_ref"].each do |k8s_release_ref|
-                deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }
+                @logger.info "[App Deploy] @provisionings: #{@provisionings}"
+                deployment_env = @provisionings.select {|p| p[:cloud] == cloud_name && 
+                                                        p[:target_project_ref] == @config[:projects]["kubernetes"][k8s_release_ref] }
                 deployment_env.each do |env|
                   @logger.info "[App Deploy] Deploying env: #{env}"
                   @logger.info "[App Deploy] Deploying to #{cloud_name} running Kubernetes #{env[:target_project_ref]} provisioned in pipeline #{env[:pipeline_id]} arch: #{env[:arch]}"
 
-                  options[:arch] = env[:arch] 
-                  @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{env[:pipeline_id]}, #{cloud_name}, #{options})"
                   # Dont deploy apps that dont have matching archs
                   if config[:projects][project_name]["arch"] && config[:projects][project_name]["arch"].find {|x| x == env[:arch]} 
+                    project_ref = @config[:projects][project_name][release_key_name]
+                    # only select projects for the currently selected deployment env arch
+                    @logger.info "[App Deploy] @builds: #{@builds}"
+                    project_build = @builds[:app_layer].find {|p| p[:project_name] == project_name && 
+                                                              p[:ref] == project_ref &&
+                                                              p[:arch] == env[:arch]}
+                    if project_build
+                      project_build_id = project_build[:pipeline_id]
+                      project_arch = project_build[:arch]
+                    end
+
+                    puts "[App Deploy] #{project_name} (#{project_id}) #{project_ref} #{project_arch} #{trigger_variables}"
+                    @logger.info "[App Deploy] self.app_deploy(#{project_id}, #{project_build_id}, #{env[:pipeline_id]}, #{cloud_name}, #{options})"
+
                     options[:arch] = env[:arch] 
 
                     self.app_deploy(project_id, project_build_id, env[:pipeline_id], cloud_name, options)
