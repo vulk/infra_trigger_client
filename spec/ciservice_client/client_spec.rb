@@ -35,7 +35,7 @@ RSpec.describe CrossCloudCI::CiService do
        a
      end
      expect(gitlab_proxy).to receive(:trigger_pipeline)
-     name = "coredns" 
+     name = "prometheus" 
      k8s = client.all_gitlab_projects.find{|x| x["name"].downcase == name}
      project_id = k8s["id"]
      ref = config[:projects][name]["head_ref"]
@@ -187,7 +187,7 @@ RSpec.describe CrossCloudCI::CiService do
      # deploys
      ###### 
      deploy_data = client.app_deploy_to_active_clouds
-     app_deploys = client.app_deploys.find {|p| p[:project_name] == "prometheus" && p[:arch] == "arm64"}
+     app_deploys = client.app_deploys.find {|p| p[:project_name] == "envoy" && p[:arch] == "arm64"}
      expect(app_deploys).to eq nil 
    end
  end
@@ -223,7 +223,7 @@ RSpec.describe CrossCloudCI::CiService do
      end
 
      # app
-     name = "coredns" 
+     name = "prometheus" 
      ref_type = "stable_ref"
      arch_type = "arm64"
      ref = config[:projects][name][ref_type]
