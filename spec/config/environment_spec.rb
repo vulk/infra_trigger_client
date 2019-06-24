@@ -15,5 +15,15 @@ RSpec.describe CrossCloudCi::Common do
       config = CrossCloudCi::Common.init_config
       expect(config[:projects]["coredns"]["arch"]).to eq ["amd64", "arm64"] 
    end
+
+   it "should overwrite cross_cloud.yml with cncnfci.yml" do
+      config = CrossCloudCi::Common.init_config
+      expect(config[:projects]["coredns"]["configuration_repo"]).to eq "https://raw.githubusercontent.com/crosscloudci/coredns-configuration" 
+   end
+
+   it "should overwrite cross_cloud.yml with cncnfci.yml" do
+      config = CrossCloudCi::Common.init_config
+      expect(config[:projects]["coredns"]["configuration_repo_path"]).to eq "https://raw.githubusercontent.com/crosscloudci/coredns-configuration/master/cncfci.yml" 
+   end
  end
 end 

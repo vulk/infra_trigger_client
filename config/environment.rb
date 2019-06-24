@@ -125,8 +125,12 @@ module CrossCloudCi
       # kubernetes does not have configuration_repo so I'm removing from loop
       valid_cross_cloud_config_projects  = @config[:projects].select { |key, proj| !proj["configuration_repo"].nil? }
       valid_cross_cloud_config_projects.each do |key, proj|
+        #150
+        if !proj["configuration_repo"].nil?
+          proj["configuration_repo_path"] = proj["configuration_repo"] + "/" + ENV["PROJECT_SEGMENT_ENV"]
+        end
         #grabbing the cncf yaml for respective project
-        cncf_config_yaml = Faraday.get proj["configuration_repo"] if !proj["configuration_repo"].nil?
+        cncf_config_yaml = Faraday.get proj["configuration_repo_path"] if !proj["configuration_repo_path"].nil?
         #format response for retrieved cncf yaml
         formatted_cncf_config_yaml = YAML.parse(cncf_config_yaml.body).to_ruby
         #merged hashes of respective cncf yaml and cross_cloud proj -deference given to cross_cloud proj values
