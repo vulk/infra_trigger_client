@@ -127,7 +127,7 @@ module CrossCloudCi
       valid_cross_cloud_config_projects.each do |key, proj|
         #150
         if !proj["configuration_repo"].nil?
-          proj["configuration_repo_path"] = proj["configuration_repo"] + "/" + ENV["PROJECT_SEGMENT_ENV"]
+          proj["configuration_repo_path"] = "#{proj["configuration_repo"]}/#{ENV["PROJECT_SEGMENT_ENV"]}"
         end
         #grabbing the cncf yaml for respective project
         cncf_config_yaml = Faraday.get proj["configuration_repo_path"] if !proj["configuration_repo_path"].nil?
