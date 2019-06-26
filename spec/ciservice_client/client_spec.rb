@@ -1,7 +1,7 @@
 require './lib/crosscloudci/ciservice_client/client'
 RSpec.describe CrossCloudCI::CiService do
  context "build_active_projects" do
-   it "should have a valid arm array" do
+   it "should have a valid arch array" do
      config = CrossCloudCi::Common.init_config
      client = CrossCloudCI::CiService::Client.new(config)
      gitlab_proxy = double()
@@ -72,7 +72,7 @@ RSpec.describe CrossCloudCI::CiService do
      data = client.build_active_projects
      expect(data["kubernetes"]["arch"]).to eq ["amd64", "arm64"]
      #######
-     
+
      provision_data = client.provision_active_clouds
      expect(provision_data[0][1]["active"]).to eq true 
    end
@@ -98,7 +98,7 @@ RSpec.describe CrossCloudCI::CiService do
      data = client.build_active_projects
      expect(data["kubernetes"]["arch"]).to eq ["amd64", "arm64"]
      #######
-    
+
      cloud_name = 'packet' 
      latest_k8s_builds = client.builds[:provision_layer].sort! {|x,y| x[:pipeline_id] <=> y[:pipeline_id]}
      kubernetes_stable = latest_k8s_builds.find {|b| b[:ref] != "master" && b[:arch] == "arm64" }

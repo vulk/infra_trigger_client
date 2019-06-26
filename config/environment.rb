@@ -11,18 +11,21 @@ module CrossCloudCi
         cross_cloud_ref="master"
         cross_project_ref="master"
         dashboard_api_host_port="cidevapi.cncf.ci"
+        project_segment_env="master"
       when "staging"
         gitlab_base_url="https://gitlab.staging.cncf.ci"
         cross_cloud_yml="https://raw.githubusercontent.com/crosscloudci/cncf-configuration/staging/cross-cloud.yml"
         cross_cloud_ref="staging"
         cross_project_ref="staging"
         dashboard_api_host_port="stagingapi.cncf.ci"
+        project_segment_env="staging"
       when "production"
         gitlab_base_url="https://gitlab.cncf.ci"
         cross_cloud_yml="https://raw.githubusercontent.com/crosscloudci/cncf-configuration/production/cross-cloud.yml"
         cross_cloud_ref="production"
         cross_project_ref="production"
         dashboard_api_host_port="productionapi.cncf.ci"
+        project_segment_env="production"
       when "demo"
         gitlab_base_url="https://gitlab.demo.cncf.ci"
         cross_cloud_yml="https://raw.githubusercontent.com/crosscloudci/cncf-configuration/production/cross-cloud.yml"
@@ -44,6 +47,7 @@ module CrossCloudCi
         cross_cloud_ref="integration"
         cross_project_ref="integration"
         dashboard_api_host_port="devapi.cncf.ci"
+        project_segment_env="integration"
       end
 
       # Environment overrides
@@ -127,17 +131,30 @@ module CrossCloudCi
       valid_cross_cloud_config_projects.each do |key, proj|
         #150
         if !proj["configuration_repo"].nil?
-          proj["configuration_repo_path"] = "#{proj["configuration_repo"]}/#{ENV["PROJECT_SEGMENT_ENV"]}"
+          puts "configuration_repo: #{proj["configuration_repo"]}"
+          
+          segment_env = ENV["PROJECT_SEGMENT_ENV"] ? ENV["PROJECT_SEGMENT_ENV"] : project_segment_env 
+
+          proj["configuration_repo_path"] = "#{proj["configuration_repo"]}/#{segment_env}/cncfci.yml"
+        else
+          @logger.fatal "#{key} configuration_repo_path empty/undefined"
+          exit 1
         end
+        puts "configuration_repo_path: #{proj["configuration_repo_path"]}"
         #grabbing the cncf yaml for respective project
         cncf_config_yaml = Faraday.get proj["configuration_repo_path"] if !proj["configuration_repo_path"].nil?
+        puts "cncf_config_yaml: #{cncf_config_yaml}"
         #format response for retrieved cncf yaml
         formatted_cncf_config_yaml = YAML.parse(cncf_config_yaml.body).to_ruby
-        #merged hashes of respective cncf yaml and cross_cloud proj -deference given to cross_cloud proj values
-        updated_cncf_config = formatted_cncf_config_yaml["project"].merge(proj) if formatted_cncf_config_yaml["project"]["display_name"].downcase == proj["gitlab_name"]
+        puts "formatted_cncf_config_yaml: #{formatted_cncf_config_yaml}"
+        #merged hashes of respective cncf yaml and cross_cloud proj precendence given to cross_cloud proj values
+        # create new project config by merging old cross cloud config over it
+        updated_cncf_config = formatted_cncf_config_yaml["project"].merge(proj) 
         #retrieved cross_cloud project from @config bc this is the hash acutally being used for init_config
-        cross_cloud_proj = @config[:projects].fetch(proj["gitlab_name"])
+        # get a #reference# to the current project in order to overwrite it
+        cross_cloud_proj = @config[:projects].fetch(key)
         #merged updated values to prod hash with merge! bc this modifies instead of returning new
+        #update original hash using the new project config  
         cross_cloud_proj.merge!(updated_cncf_config || {})
       end 
         
