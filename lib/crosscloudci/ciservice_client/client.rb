@@ -55,6 +55,15 @@ module CrossCloudCI
         trigger_variables[:DASHBOARD_API_HOST_PORT] = options[:dashboard_api_host_port] unless options[:dashboard_api_host_port].nil?
         trigger_variables[:CROSS_CLOUD_YML] = @config[:cross_cloud_yml]
 
+        case ref 
+        when "master"
+          pipeline_release_type = "head"
+        else
+          pipeline_release_type = "stable"
+        end
+
+        trigger_variables[:PIPELINE_RELEASE_TYPE] = pipeline_release_type 
+
         arch = options[:arch] || "amd64"
         trigger_variables[:ARCH] = arch
 
@@ -88,6 +97,7 @@ module CrossCloudCI
             return
           end
         end
+
 
         gitlab_pipeline_id = gitlab_result.id
         data = {  project_name: project_name, ref: ref, project_id: project_id, pipeline_id: gitlab_pipeline_id, arch: arch}
@@ -260,6 +270,15 @@ module CrossCloudCI
 
         arch = options[:arch] || "amd64"
         trigger_variables[:ARCH] = arch
+
+        case target_project_ref 
+        when "master"
+          pipeline_release_type = "head"
+        else
+          pipeline_release_type = "stable"
+        end
+
+        trigger_variables[:PIPELINE_RELEASE_TYPE] = pipeline_release_type 
 
         gitlab_result = nil
         tries=3
@@ -544,6 +563,15 @@ module CrossCloudCI
 
         trigger_variables[:KUBERNETES_RELEASE_TYPE] = kubernetes_release_type
         trigger_variables[:PROVISION_PIPELINE_ID] = target_provision_id # cross-cloud k8s provisioning
+
+        case trigger_ref 
+        when "master"
+          pipeline_release_type = "head"
+        else
+          pipeline_release_type = "stable"
+        end
+
+        trigger_variables[:PIPELINE_RELEASE_TYPE] = pipeline_release_type 
 
         # How to determine test env for the selector
         # 1. release type => stable / head
