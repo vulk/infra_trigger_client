@@ -19,8 +19,8 @@ RSpec.describe CrossCloudCi::Common do
    ## crosscloudci/crosscloudci#103
    it "should overwrite cross_cloud.yml with release details in project configuration" do
       config = CrossCloudCi::Common.init_config
-      expect(config[:projects]["prometheus"]["stable_ref"]).to eq "v2.10.0"
-      expect(config[:projects]["prometheus"]["head_ref"]).to eq "master"
+      expect(config[:projects]["fluentd"]["stable_ref"]).to eq "v1.5.0"
+      expect(config[:projects]["fluentd"]["head_ref"]).to eq "master"
    end
  end
 end 
