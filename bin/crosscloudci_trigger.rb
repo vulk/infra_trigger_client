@@ -150,6 +150,8 @@ def build_and_deploy_all_projects
 
   @tc.wait_for_kubernetes_builds({status_check_interval: 30})
 
+  sleep 10
+
   ## 3. Provision kubernetes to all active clouds
   # TODO: skip a provisioning a K8s if it fails to build
 
