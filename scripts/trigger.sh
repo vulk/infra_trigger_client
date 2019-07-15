@@ -4,12 +4,16 @@
 K8S_PIPELINE_ID=$(curl --request POST \
                          --form token="$K8S_TRIGGER_TOKEN" \
                          --form ref="$K8S_REF" \
+                         --form "variables[ARCH]=$ARCH" \
                          "$BASE_URL"/api/v4/projects/14/trigger/pipeline | jq '.id')
 
 #Trigger Infra Provisioning Pipeline
 INFRA_PIPELINE_ID=$(curl --request POST \
                          --form token="$INFRA_TRIGGER_TOKEN" \
                          --form ref="$INFRA_REF" \
+                         --form "variables[NAME]=$NAME" \
+                         --form "variables[TF_VAR_packet_master_device_plan]=$MASTER_NODE_TYPE" \
+                         --form "variables[TF_VAR_packet_worker_device_plan]=$WORKER_NODE_TYPE" \
                          "$BASE_URL"/api/v4/projects/63/trigger/pipeline | jq '.id')
 
 while [ "$PIPELINE_STATUS" != "success" ]; do
@@ -28,6 +32,7 @@ done
 KUBESPRAY_PIPELINE_ID=$(curl --request POST \
                        --form token="$KUBESPRAY_TRIGGER_TOKEN" \
                        --form ref="$KUBESPRAY_REF" \
+                       --form "variables[ARCH]=$ARCH" \
                        --form "variables[INFRA_PIPELINE_ID]=$INFRA_PIPELINE_ID" \
                        --form "variables[K8S_PIPELINE_ID]=$K8S_PIPELINE_ID" \
                        "$BASE_URL"/api/v4/projects/65/trigger/pipeline | jq '.id')
