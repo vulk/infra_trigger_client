@@ -98,7 +98,10 @@ module CrossCloudCi
             },
             "testproj" => {
               :api_token => ENV["GITLAB_TESTPROJ_TOKEN"]
-            }
+            },
+            "linkerd2" => {
+              :api_token => ENV["GITLAB_LINKERD2_TOKEN"]
+            },
           }
         }
       }

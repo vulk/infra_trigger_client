@@ -767,9 +767,18 @@ module CrossCloudCI
 
         release_ref_keys = default_release_ref_keys if release_ref_keys.empty?
 
+        deployed_projects = []
+
         active_app_projects = @active_projects.select { |k,v| v["app_layer"] }
+        #TODO skip projects that should not be deployed
         active_app_projects.each do |project|
           project_name = project[0]
+
+          # issue 256
+          if @config[:projects][project_name]["deploy"] == false then
+            next 
+          end
+
           project_id = project_name_by_id(project_name)
 
           @logger.info "[App Deploy] #{project_name}"
@@ -818,6 +827,7 @@ module CrossCloudCI
 
                     options[:arch] = env[:arch] 
 
+                    deployed_projects << project_name
                     self.app_deploy(project_id, project_build_id, env[:pipeline_id], cloud_name, options)
                   end
                 end
@@ -832,7 +842,7 @@ module CrossCloudCI
 
         end
 
-        true
+        deployed_projects.uniq
       end
 
       ##############################################################
