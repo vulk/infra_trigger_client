@@ -152,7 +152,9 @@ RSpec.describe CrossCloudCI::CiService do
      # deploys
      ###### 
      deploy_data = client.app_deploy_to_active_clouds
-     expect(deploy_data).to eq true 
+
+     expect(deploy_data.find{|x| x == "testproj"}).to eq nil 
+     expect(deploy_data.count).to be > 0 
    end
    # All projects current have arm enabled
    # it "should only accept arm provisions if arch includes arm" do

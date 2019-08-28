@@ -42,6 +42,12 @@ RSpec.describe CrossCloudCi::Common do
       expect(config[:projects]["testproj"]["ci_system"][0]["ci_system_type"]).to eq "travis-ci"
       expect(config[:projects]["testproj"]["ci_system"][0]["ci_project_url"]).to eq "https://example.com/cncfci/testproj"
       expect(config[:projects]["testproj"]["ci_system"][0]["arch"][0]).to eq "amd64"
+      expect(config[:projects]["testproj"]["deploy"]).to eq false
+   end
+
+   it "should be able to see linkerd2" do
+      config = CrossCloudCi::Common.init_config
+      expect(config[:projects]["linkerd2"]["arch"]).to eq ["amd64"] 
    end
   end
 end 
