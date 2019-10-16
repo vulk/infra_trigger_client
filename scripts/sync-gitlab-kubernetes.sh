@@ -14,3 +14,4 @@ git pull github master
 K8S_NIGHTLY=$(curl https://storage.googleapis.com/kubernetes-release-dev/ci-cross/latest.txt)
 git reset ${K8S_NIGHTLY#*+}
 git push --force --all
+git push --tags --force
