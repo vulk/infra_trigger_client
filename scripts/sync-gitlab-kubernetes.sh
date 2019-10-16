@@ -1,7 +1,14 @@
 #!/bin/bash
 
 git clone git@${1}:kubernetes/kubernetes.git /tmp/k8s
-pushd /tmp/k8s
+cd /tmp/k8s
+echo "code: $?"
+if [[ $? -ne 0]]; then
+    echo 'Git clone failed'
+    exit 1
+else
+    continue
+fi
 git remote add github https://github.com/kubernetes/kubernetes.git
 git fetch github -a
 git pull github master
