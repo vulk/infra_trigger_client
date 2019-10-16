@@ -172,8 +172,17 @@ module CrossCloudCI
         status
       end
 
+      def sync_k8s_nightly_builds
+        sync_k8s = File.expand_path 'bin/sync-gitlab-kubernetes.sh' 
+        puts "sync_k8s_nightly_builds sync_k8s: #{sync_k8s}"
+        base_url = @config[:gitlab][:base_url]
+        puts "sync_k8s_nightly_builds base_url: #{base_url}"
+        `#{sync_k8s} #{base_url}`
+      end
+
       # Purpose: loop through all active projects and call build project for each
       def build_active_projects
+        sync_k8s_nightly_builds
         load_project_data
         @active_projects.each do |proj|
           name = proj[0]

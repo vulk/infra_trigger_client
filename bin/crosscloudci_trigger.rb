@@ -182,7 +182,6 @@ def build_and_deploy_all_projects
   @tc.deprovision_clouds
 end
 
-
 def build_project(project_name, ref_name)
   if project_name.nil? or ref_name.nil?
     puts "Error: project name and ref required!"
