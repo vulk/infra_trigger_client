@@ -40,11 +40,14 @@ module CrossCloudCi
       end
     end
 
+    def sync_k8s_nightly_build
+        @ciservice.sync_k8s_nightly_build
+    end
+
     def load_previous_builds
       # Load previous build data
       @ciservice.builds = @data_store.transaction { @data_store.fetch(:builds, @ciservice.builds) }
     end
-
 
     def provision_clouds
       @data_store.transaction do
