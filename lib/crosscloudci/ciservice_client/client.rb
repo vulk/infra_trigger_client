@@ -175,9 +175,9 @@ module CrossCloudCI
       def sync_k8s_nightly_builds
         sync_k8s = File.expand_path 'bin/sync-gitlab-kubernetes.sh' 
         puts "sync_k8s_nightly_builds sync_k8s: #{sync_k8s}"
-        base_url = @config[:gitlab][:base_url]
-        puts "sync_k8s_nightly_builds base_url: #{base_url}"
-        `#{sync_k8s} #{base_url}`
+        git_uri = @config[:gitlab][:base_url].sub(/^https?\:\/\//, '')
+        puts "sync_k8s_nightly_builds base_url: #{git_uri}"
+        `#{sync_k8s} #{git_uri}`
       end
 
       # Purpose: loop through all active projects and call build project for each
