@@ -30,12 +30,17 @@ else
     echo "Clone successful"
 fi
 
+if [ -z "$2" ] ; then
+  K8S_COMMIT=$(curl https://storage.googleapis.com/kubernetes-release-dev/ci-cross/latest.txt)
+else
+  K8S_COMMIT="$2"
+fi
+
 pushd "$builddir"
 git remote add github https://github.com/kubernetes/kubernetes.git
 git fetch github -a
 git pull github master
-K8S_NIGHTLY=$(curl https://storage.googleapis.com/kubernetes-release-dev/ci-cross/latest.txt)
-git reset ${K8S_NIGHTLY#*+}
+git reset ${K8S_COMMIT#*+}
 git push --force --all
 git push --tags --force
 

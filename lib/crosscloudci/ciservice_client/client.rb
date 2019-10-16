@@ -172,17 +172,32 @@ module CrossCloudCI
         status
       end
 
-      def sync_k8s_nightly_builds
+      def k8s_nightly_sha
+        #`curl -q -s https://storage.googleapis.com/kubernetes-release-dev/ci-cross/latest.txt`
+        k8s_cross_latest_url="https://storage.googleapis.com/kubernetes-release-dev/ci-cross/latest.txt"
+        response = Faraday.get k8s_cross_latest_url 
+        if response.nil?
+          @logger.fatal "Failed to retrieve latest k8s ci-cross release from #{k8s_cross_latest_url}"
+          exit 1
+        end
+        response.body
+      end
+
+      def sync_k8s_nightly_build
+        k8s_sha = k8s_nightly_sha
+        git_host = @config[:gitlab][:base_url].sub(/^https?\:\/\//, '')
+        sync_k8s_build(git_host, k8s_sha)
+      end
+
+      def sync_k8s_build(git_host, k8s_sha)
         sync_k8s = File.expand_path 'bin/sync-gitlab-kubernetes.sh' 
-        puts "sync_k8s_nightly_builds sync_k8s: #{sync_k8s}"
-        git_uri = @config[:gitlab][:base_url].sub(/^https?\:\/\//, '')
-        puts "sync_k8s_nightly_builds base_url: #{git_uri}"
-        `#{sync_k8s} #{git_uri}`
+        puts "sync_k8s_build external script: #{sync_k8s}"
+        puts "sync_k8s_build git host: #{git_host}, k8s sha: #{k8s_sha}"
+        `#{sync_k8s} #{git_host} #{k8s_sha}`
       end
 
       # Purpose: loop through all active projects and call build project for each
       def build_active_projects
-        sync_k8s_nightly_builds
         load_project_data
         @active_projects.each do |proj|
           name = proj[0]
@@ -201,6 +216,12 @@ module CrossCloudCI
 
             project_name = project_name_by_id(project_id)
             # @logger.debug "project name #{project_name}"
+
+            if project_name == "kubernetes" and release_key_name == "head_ref"
+              @logger.debug "Syncing nightly build for #{project_name} HEAD release"
+              sync_k8s_nightly_build
+            end
+
             # TODO: check for arch support on the provider?
             arch_types = @config[:projects][project_name]["arch"]
             # @logger.debug "config projects #{@config[:projects]}"
