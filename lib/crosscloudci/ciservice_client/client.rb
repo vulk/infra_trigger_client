@@ -217,8 +217,9 @@ module CrossCloudCI
             project_name = project_name_by_id(project_id)
             # @logger.debug "project name #{project_name}"
 
-            if project_name == "kubernetes" and release_key_name == "head_ref"
-              @logger.debug "Syncing nightly build for #{project_name} HEAD release"
+            if project_name == "kubernetes"
+              @logger.debug "Syncing nightly build for #{project_name} HEAD release and pushing up all tags"
+              # mirror off in gitlab.   
               sync_k8s_nightly_build
             end
 
