@@ -209,19 +209,19 @@ module CrossCloudCI
 
           @logger.debug "setting project id"
           project_id =  all_gitlab_projects.select {|agp| agp["name"].downcase == name}.first["id"]
+          project_name = project_name_by_id(project_id)
 
+          if project_name == "kubernetes"
+            @logger.debug "Syncing nightly build for #{project_name} HEAD release and pushing up all tags"
+            # mirror off in gitlab.   
+            sync_k8s_nightly_build
+          end
+          
           ["stable_ref", "head_ref"].each do |release_key_name|
             #next if name == "kubernetes" and release_key_name == "head_ref"
             ref = @config[:projects][name][release_key_name]
 
-            project_name = project_name_by_id(project_id)
             # @logger.debug "project name #{project_name}"
-
-            if project_name == "kubernetes"
-              @logger.debug "Syncing nightly build for #{project_name} HEAD release and pushing up all tags"
-              # mirror off in gitlab.   
-              sync_k8s_nightly_build
-            end
 
             # TODO: check for arch support on the provider?
             arch_types = @config[:projects][project_name]["arch"]
