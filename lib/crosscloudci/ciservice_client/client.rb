@@ -237,7 +237,7 @@ module CrossCloudCI
 
               # Prom builds will clash if they run at the same time due to the names being based on the timestamp.
               # See https://github.com/prometheus/promu/blob/d629dfcdec49387b42164f3fe6dad353f922557e/cmd/crossbuild.go#L198
-              if project_name == "prometheus" && options[:arch] == "amd64"
+              if project_name == "prometheus"
                 puts 'Starting prometheus build delay'
                 sleep 15
               end
