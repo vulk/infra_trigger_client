@@ -239,7 +239,7 @@ module CrossCloudCI
               # See https://github.com/prometheus/promu/blob/d629dfcdec49387b42164f3fe6dad353f922557e/cmd/crossbuild.go#L198
               if project_name == "prometheus"
                 puts 'Starting prometheus build delay'
-                sleep 15
+                sleep 120
               end
 
               puts "Calling build_project(#{project_id}, #{ref}, #{options})"
