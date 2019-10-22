@@ -235,6 +235,13 @@ module CrossCloudCI
             arch_types.each do |machine_arch|
               options[:arch] = machine_arch
 
+              # Prom builds will clash if they run at the same time due to the names being based on the timestamp.
+              # See https://github.com/prometheus/promu/blob/d629dfcdec49387b42164f3fe6dad353f922557e/cmd/crossbuild.go#L198
+              if project_name == "prometheus"
+                puts 'Starting prometheus build delay'
+                sleep 3
+              end
+
               puts "Calling build_project(#{project_id}, #{ref}, #{options})"
               #self.build_project(project_id, api_token, ref, options)
               self.build_project(project_id, ref, options)
