@@ -209,19 +209,19 @@ module CrossCloudCI
 
           @logger.debug "setting project id"
           project_id =  all_gitlab_projects.select {|agp| agp["name"].downcase == name}.first["id"]
+          project_name = project_name_by_id(project_id)
 
+          if project_name == "kubernetes"
+            @logger.debug "Syncing nightly build for #{project_name} HEAD release and pushing up all tags"
+            # mirror off in gitlab.   
+            sync_k8s_nightly_build
+          end
+          
           ["stable_ref", "head_ref"].each do |release_key_name|
             #next if name == "kubernetes" and release_key_name == "head_ref"
             ref = @config[:projects][name][release_key_name]
 
-            project_name = project_name_by_id(project_id)
             # @logger.debug "project name #{project_name}"
-
-            if project_name == "kubernetes"
-              @logger.debug "Syncing nightly build for #{project_name} HEAD release and pushing up all tags"
-              # mirror off in gitlab.   
-              sync_k8s_nightly_build
-            end
 
             # TODO: check for arch support on the provider?
             arch_types = @config[:projects][project_name]["arch"]
@@ -234,6 +234,13 @@ module CrossCloudCI
 
             arch_types.each do |machine_arch|
               options[:arch] = machine_arch
+
+              # Prom builds will clash if they run at the same time due to the names being based on the timestamp.
+              # See https://github.com/prometheus/promu/blob/d629dfcdec49387b42164f3fe6dad353f922557e/cmd/crossbuild.go#L198
+              if project_name == "prometheus"
+                puts 'Starting prometheus build delay'
+                sleep 120
+              end
 
               puts "Calling build_project(#{project_id}, #{ref}, #{options})"
               #self.build_project(project_id, api_token, ref, options)
