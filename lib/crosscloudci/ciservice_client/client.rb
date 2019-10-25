@@ -172,6 +172,30 @@ module CrossCloudCI
         status
       end
 
+      def k8s_nightly_sha
+        #`curl -q -s https://storage.googleapis.com/kubernetes-release-dev/ci-cross/latest.txt`
+        k8s_cross_latest_url="https://storage.googleapis.com/kubernetes-release-dev/ci-cross/latest.txt"
+        response = Faraday.get k8s_cross_latest_url 
+        if response.nil?
+          @logger.fatal "Failed to retrieve latest k8s ci-cross release from #{k8s_cross_latest_url}"
+          exit 1
+        end
+        response.body
+      end
+
+      def sync_k8s_nightly_build
+        k8s_sha = k8s_nightly_sha
+        git_host = @config[:gitlab][:base_url].sub(/^https?\:\/\//, '')
+        sync_k8s_build(git_host, k8s_sha)
+      end
+
+      def sync_k8s_build(git_host, k8s_sha)
+        sync_k8s = File.expand_path 'bin/sync-gitlab-kubernetes.sh' 
+        puts "sync_k8s_build external script: #{sync_k8s}"
+        puts "sync_k8s_build git host: #{git_host}, k8s sha: #{k8s_sha}"
+        `#{sync_k8s} #{git_host} #{k8s_sha}`
+      end
+
       # Purpose: loop through all active projects and call build project for each
       def build_active_projects
         load_project_data
@@ -185,13 +209,20 @@ module CrossCloudCI
 
           @logger.debug "setting project id"
           project_id =  all_gitlab_projects.select {|agp| agp["name"].downcase == name}.first["id"]
+          project_name = project_name_by_id(project_id)
 
+          if project_name == "kubernetes"
+            @logger.debug "Syncing nightly build for #{project_name} HEAD release and pushing up all tags"
+            # mirror off in gitlab.   
+            sync_k8s_nightly_build
+          end
+          
           ["stable_ref", "head_ref"].each do |release_key_name|
             #next if name == "kubernetes" and release_key_name == "head_ref"
             ref = @config[:projects][name][release_key_name]
 
-            project_name = project_name_by_id(project_id)
             # @logger.debug "project name #{project_name}"
+
             # TODO: check for arch support on the provider?
             arch_types = @config[:projects][project_name]["arch"]
             # @logger.debug "config projects #{@config[:projects]}"
@@ -203,6 +234,13 @@ module CrossCloudCI
 
             arch_types.each do |machine_arch|
               options[:arch] = machine_arch
+
+              # Prom builds will clash if they run at the same time due to the names being based on the timestamp.
+              # See https://github.com/prometheus/promu/blob/d629dfcdec49387b42164f3fe6dad353f922557e/cmd/crossbuild.go#L198
+              if project_name == "prometheus"
+                puts 'Starting prometheus build delay'
+                sleep 120
+              end
 
               puts "Calling build_project(#{project_id}, #{ref}, #{options})"
               #self.build_project(project_id, api_token, ref, options)

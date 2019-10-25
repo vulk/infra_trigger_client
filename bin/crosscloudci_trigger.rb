@@ -122,6 +122,13 @@ def provision_clouds
   @tc.provision_clouds
 end
 
+def sync_k8s_nightly_build
+  default_connect unless @tc
+  @tc.sync_k8s_nightly_build
+end
+
+
+
 def build_projects
   default_connect unless @tc
   @tc.build_projects
@@ -149,6 +156,8 @@ def build_and_deploy_all_projects
   #  Happy path:  continue no matter the status for both master/head continue (hoping/expecting success)
 
   @tc.wait_for_kubernetes_builds({status_check_interval: 30})
+
+  sleep 10
 
   ## 3. Provision kubernetes to all active clouds
   # TODO: skip a provisioning a K8s if it fails to build
@@ -179,7 +188,6 @@ def build_and_deploy_all_projects
   ## Cleanup resources
   @tc.deprovision_clouds
 end
-
 
 def build_project(project_name, ref_name)
   if project_name.nil? or ref_name.nil?
