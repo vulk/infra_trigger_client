@@ -102,6 +102,9 @@ module CrossCloudCi
             "linkerd2" => {
               :api_token => ENV["GITLAB_LINKERD2_TOKEN"]
             },
+            "jaeger" => {
+              :api_token => ENV["GITLAB_JAEGER_TOKEN"]
+            },
           }
         }
       }
