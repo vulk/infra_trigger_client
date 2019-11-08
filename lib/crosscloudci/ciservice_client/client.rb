@@ -245,7 +245,7 @@ module CrossCloudCI
               # See https://github.com/prometheus/promu/blob/d629dfcdec49387b42164f3fe6dad353f922557e/cmd/crossbuild.go#L198
               if project_name == "prometheus"
                 # This code block trys to make the delay more efficient by not sleeping before the first prometheus pipeline is created.
-                unless ref != master && machine_arch == arch_types[0]
+                unless ref != "master" && machine_arch == arch_types[0]
                   puts 'Starting prometheus build delay'
                   sleep 120
                 end
