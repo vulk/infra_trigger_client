@@ -220,6 +220,11 @@ module CrossCloudCI
           ["stable_ref", "head_ref"].each do |release_key_name|
             #next if name == "kubernetes" and release_key_name == "head_ref"
             ref = @config[:projects][name][release_key_name]
+            
+            # Envoy builds will clash if master & stable builds run at the same time.
+            unless release_key_name == stable_ref
+              sleep 1080
+            end
 
             # @logger.debug "project name #{project_name}"
 
