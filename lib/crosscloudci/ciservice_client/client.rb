@@ -223,7 +223,7 @@ module CrossCloudCI
             ref = @config[:projects][name][release_key_name]
             
             # Envoy builds will clash if master & stable builds run at the same time.
-            unless release_key_name == "stable_ref"
+            if release_key_name == "head_ref" && project_name == "envoy"
               sleep 1080
             end
 
