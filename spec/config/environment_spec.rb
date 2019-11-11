@@ -34,7 +34,7 @@ RSpec.describe CrossCloudCi::Common do
    ## crosscloudci/crosscloudci#103
    it "should overwrite cross_cloud.yml with release details in project configuration" do
       config = CrossCloudCi::Common.init_config
-      expect(config[:projects]["fluentd"]["stable_ref"]).to eq "v1.6.3"
+      expect(config[:projects]["fluentd"]["stable_ref"]).to_not be_nil 
       expect(config[:projects]["fluentd"]["head_ref"]).to eq "master"
    end
    it "should overwrite cross_cloud.yml with ci system details in project configuration" do
