@@ -224,6 +224,7 @@ module CrossCloudCI
             
             # Envoy builds will clash if master & stable builds run at the same time.
             if release_key_name == "head_ref" && project_name == "envoy"
+              puts 'Starting envoy build delay'
               sleep 1080
             end
 
@@ -243,9 +244,9 @@ module CrossCloudCI
 
               # Prom builds will clash if they run at the same time due to the names being based on the timestamp.
               # See https://github.com/prometheus/promu/blob/d629dfcdec49387b42164f3fe6dad353f922557e/cmd/crossbuild.go#L198
-              unless project_name != "prometheus" && ref != "master" && machine_arch == arch_types[0]
+              unless (project_name != "prometheus") || (machine_arch == arch_types[0]) && (ref != "master") then
                 puts 'Starting prometheus build delay'
-                sleep 120
+                sleep 180
               end
 
               puts "Calling build_project(#{project_id}, #{ref}, #{options})"
